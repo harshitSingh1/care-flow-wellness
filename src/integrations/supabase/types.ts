@@ -14,7 +14,150 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          severity: string
+          user_id: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          message_type: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          message_type: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          message_type?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      check_ins: {
+        Row: {
+          created_at: string
+          id: string
+          journal: string | null
+          mood: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          journal?: string | null
+          mood: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          journal?: string | null
+          mood?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      consultations: {
+        Row: {
+          created_at: string
+          id: string
+          purpose: string | null
+          scheduled_at: string
+          specialty: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          purpose?: string | null
+          scheduled_at: string
+          specialty: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          purpose?: string | null
+          scheduled_at?: string
+          specialty?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      doctor_reviews: {
+        Row: {
+          ai_suggestion: string
+          created_at: string
+          doctor_reply: string | null
+          id: string
+          problem: string
+          reviewed_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          ai_suggestion: string
+          created_at?: string
+          doctor_reply?: string | null
+          id?: string
+          problem: string
+          reviewed_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          ai_suggestion?: string
+          created_at?: string
+          doctor_reply?: string | null
+          id?: string
+          problem?: string
+          reviewed_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

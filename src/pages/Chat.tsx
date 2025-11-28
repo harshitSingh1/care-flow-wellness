@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { chatService } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 type Message = {
   id: string;
@@ -16,18 +19,13 @@ type Message = {
 };
 
 const Chat = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "Hello! I'm your CareForAll health and wellness assistant. I'm here to provide guidance on health concerns, mental wellness support, diet suggestions, and coping strategies. How can I help you today?",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,6 +35,50 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate('/auth');
+        return;
+      }
+      setIsAuthenticated(true);
+      await loadMessages();
+    };
+    checkAuth();
+  }, [navigate]);
+
+  const loadMessages = async () => {
+    try {
+      const data = await chatService.getMessages('health');
+      if (data.length === 0) {
+        setMessages([
+          {
+            id: "welcome",
+            role: "assistant",
+            content: "Hello! I'm your CareForAll health and wellness assistant. I'm here to provide guidance on health concerns, mental wellness support, diet suggestions, and coping strategies. How can I help you today?",
+            timestamp: new Date(),
+          },
+        ]);
+      } else {
+        const formattedMessages = data.map(msg => ({
+          id: msg.id,
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+        }));
+        setMessages(formattedMessages);
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load messages",
+        variant: "destructive",
+      });
+    }
+  };
+
   const quickSuggestions = [
     { icon: Heart, text: "I'm feeling stressed", category: "mental" },
     { icon: Pill, text: "Home remedy for headache", category: "health" },
@@ -44,31 +86,8 @@ const Chat = () => {
     { icon: Brain, text: "Coping strategies for anxiety", category: "mental" },
   ];
 
-  const getAIResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    if (lowerMessage.includes("stress") || lowerMessage.includes("anxious")) {
-      return "I understand you're feeling stressed. Here are some immediate strategies that can help:\n\n✨ Deep Breathing: Try the 4-7-8 technique - breathe in for 4 seconds, hold for 7, exhale for 8.\n\n🧘 Progressive Muscle Relaxation: Tense and release each muscle group, starting from your toes to your head.\n\n🚶 Take a Short Walk: Even 5 minutes of movement can help reset your nervous system.\n\n💭 Grounding Exercise: Name 5 things you see, 4 you can touch, 3 you hear, 2 you smell, 1 you taste.\n\nWould you like me to connect you with a mental health professional for ongoing support? (This recommendation will be reviewed by a certified therapist within 2 hours)";
-    }
-    
-    if (lowerMessage.includes("headache")) {
-      return "For headache relief, here are some safe home remedies:\n\n💧 Hydration: Drink 2-3 glasses of water slowly. Dehydration is a common cause.\n\n🧊 Cold Compress: Apply to your forehead for 15 minutes.\n\n☕ Caffeine: A small amount can help (but not if you have frequent headaches).\n\n😴 Rest in a Dark, Quiet Room: Reduce sensory stimulation.\n\n🚫 When to Seek Immediate Care:\n- Sudden, severe headache\n- Headache with fever, stiff neck, confusion\n- Headache after head injury\n\nI'll flag this for doctor review to ensure these suggestions are appropriate for your specific situation. The review typically completes within 4 hours.";
-    }
-    
-    if (lowerMessage.includes("diet") || lowerMessage.includes("nutrition")) {
-      return "Here's a balanced daily nutrition guide:\n\n🥗 Vegetables & Fruits: 5-7 servings (fill half your plate)\n\n🍚 Whole Grains: Brown rice, quinoa, whole wheat (1/4 of plate)\n\n🥩 Lean Proteins: Fish, chicken, beans, tofu (1/4 of plate)\n\n💧 Hydration: 8-10 glasses of water daily\n\n🥜 Healthy Fats: Nuts, avocado, olive oil (in moderation)\n\n⏰ Meal Timing: 3 balanced meals + 2 small snacks\n\nWould you like personalized recommendations? I can connect you with a certified dietitian who will review your specific needs.";
-    }
-    
-    if (lowerMessage.includes("sleep") || lowerMessage.includes("insomnia")) {
-      return "Better sleep starts with good sleep hygiene:\n\n🌙 Consistent Schedule: Same bedtime and wake time daily, even weekends\n\n📱 Screen-Free Zone: No devices 1 hour before bed\n\n🌡️ Cool Room: 60-67°F (15-19°C) is ideal\n\n☕ Caffeine Cutoff: None after 2 PM\n\n🧘 Relaxation Routine: Reading, gentle stretching, or meditation\n\n💡 Dim Lights: Start lowering light levels 2 hours before bed\n\nIf sleep issues persist beyond 2 weeks, I'll recommend consultation with a sleep specialist.";
-    }
-    
-    // Default response
-    return "Thank you for sharing that with me. I'm here to help with:\n\n• Health guidance and symptom assessment\n• Mental wellness support and coping strategies\n• Nutrition and lifestyle recommendations\n• Preventive care advice\n\nCould you tell me more specifically what you're experiencing so I can provide the most helpful guidance? Remember, for emergencies, always call 911 or visit your nearest emergency room.";
-  };
-
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || !isAuthenticated) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -81,22 +100,32 @@ const Chat = () => {
     setInput("");
     setIsTyping(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: getAIResponse(input),
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-      setIsTyping(false);
+    try {
+      const conversationHistory = messages.map(m => ({ 
+        role: m.role, 
+        content: m.content 
+      }));
+      conversationHistory.push({ role: "user", content: userMessage.content });
+
+      const response = await chatService.sendMessage(conversationHistory, 'health');
       
-      // Save to localStorage
-      const savedChats = JSON.parse(localStorage.getItem("careforall_chats") || "[]");
-      savedChats.push(userMessage, aiResponse);
-      localStorage.setItem("careforall_chats", JSON.stringify(savedChats));
-    }, 1500);
+      await loadMessages();
+      
+      toast({
+        title: "Response received",
+        description: "AI has provided guidance based on your question.",
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to get AI response. Please try again.",
+        variant: "destructive",
+      });
+      setMessages(prev => prev.filter(m => m.id !== userMessage.id));
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleQuickSuggestion = (text: string) => {
@@ -109,7 +138,6 @@ const Chat = () => {
       
       <div className="flex-1 pt-20 pb-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col max-w-4xl">
-          {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -126,7 +154,6 @@ const Chat = () => {
             </p>
           </motion.div>
 
-          {/* Quick Suggestions */}
           {messages.length === 1 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -154,7 +181,6 @@ const Chat = () => {
             </motion.div>
           )}
 
-          {/* Messages */}
           <Card className="flex-1 p-6 mb-6 overflow-y-auto bg-card/30 backdrop-blur-sm border-border/50">
             <div className="space-y-6">
               <AnimatePresence>
@@ -217,7 +243,6 @@ const Chat = () => {
             </div>
           </Card>
 
-          {/* Input */}
           <div className="flex gap-3">
             <Input
               value={input}

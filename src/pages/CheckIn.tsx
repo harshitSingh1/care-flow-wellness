@@ -7,28 +7,42 @@ import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { Heart, Smile, Meh, Frown, Angry, TrendingUp, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { checkInService } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 type Mood = "great" | "good" | "okay" | "sad" | "angry";
-type CheckInEntry = {
-  date: string;
-  mood: Mood;
-  journal: string;
-  timestamp: number;
-};
 
 const CheckIn = () => {
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [journal, setJournal] = useState("");
-  const [entries, setEntries] = useState<CheckInEntry[]>([]);
+  const [entries, setEntries] = useState<any[]>([]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const saved = localStorage.getItem("careforall_checkins");
-    if (saved) {
-      setEntries(JSON.parse(saved));
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate('/auth');
+        return;
+      }
+      setIsAuthenticated(true);
+      loadCheckIns();
+    };
+    checkAuth();
+  }, [navigate]);
+
+  const loadCheckIns = async () => {
+    try {
+      const data = await checkInService.getCheckIns();
+      setEntries(data);
+    } catch (error) {
+      console.error('Error loading check-ins:', error);
     }
-  }, []);
+  };
 
   const moods = [
     { value: "great" as Mood, icon: Smile, label: "Great", color: "from-green-400 to-emerald-500", emoji: "😊" },
@@ -38,7 +52,7 @@ const CheckIn = () => {
     { value: "angry" as Mood, icon: Angry, label: "Stressed", color: "from-red-500 to-pink-600", emoji: "😤" },
   ];
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedMood) {
       toast({
         title: "Please select a mood",
@@ -48,28 +62,31 @@ const CheckIn = () => {
       return;
     }
 
-    const entry: CheckInEntry = {
-      date: new Date().toLocaleDateString(),
-      mood: selectedMood,
-      journal: journal,
-      timestamp: Date.now(),
-    };
+    if (!isAuthenticated) return;
 
-    const updatedEntries = [...entries, entry];
-    setEntries(updatedEntries);
-    localStorage.setItem("careforall_checkins", JSON.stringify(updatedEntries));
+    try {
+      await checkInService.saveCheckIn(selectedMood, journal);
+      
+      setShowSuccess(true);
+      setTimeout(() => {
+        setSelectedMood(null);
+        setJournal("");
+        setShowSuccess(false);
+        loadCheckIns();
+      }, 3000);
 
-    setShowSuccess(true);
-    setTimeout(() => {
-      setSelectedMood(null);
-      setJournal("");
-      setShowSuccess(false);
-    }, 3000);
-
-    toast({
-      title: "Check-in saved! ✨",
-      description: getEncouragingMessage(selectedMood),
-    });
+      toast({
+        title: "Check-in saved! ✨",
+        description: getEncouragingMessage(selectedMood),
+      });
+    } catch (error) {
+      console.error('Error saving check-in:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save check-in. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getEncouragingMessage = (mood: Mood): string => {
@@ -213,9 +230,9 @@ const CheckIn = () => {
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {entries.slice(-5).reverse().map((entry, index) => (
+                      {entries.slice(0, 5).map((entry) => (
                         <div
-                          key={entry.timestamp}
+                          key={entry.id}
                           className="flex items-center justify-between p-3 rounded-xl bg-muted/30"
                         >
                           <div className="flex items-center gap-3">
@@ -224,7 +241,9 @@ const CheckIn = () => {
                             </span>
                             <div>
                               <div className="text-sm font-medium capitalize">{entry.mood}</div>
-                              <div className="text-xs text-muted-foreground">{entry.date}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(entry.created_at).toLocaleDateString()}
+                              </div>
                             </div>
                           </div>
                         </div>
