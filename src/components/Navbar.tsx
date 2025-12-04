@@ -56,12 +56,12 @@ export const Navbar = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" asChild>
-              <Link to="/auth">Sign In</Link>
-            </Button>
-            <Button variant="hero" asChild>
-              <Link to="/auth">Get Started</Link>
-            </Button>
+            <Link to="/auth">
+              <Button variant="ghost">Sign In</Button>
+            </Link>
+            <Link to="/auth">
+              <Button variant="hero">Get Started</Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -103,12 +103,12 @@ export const Navbar = () => {
                 </Link>
               ))}
               <div className="pt-3 space-y-2">
-                <Button variant="outline" className="w-full" asChild>
-                  <Link to="/auth">Sign In</Link>
-                </Button>
-                <Button variant="hero" className="w-full" asChild>
-                  <Link to="/auth">Get Started</Link>
-                </Button>
+                <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="outline" className="w-full">Sign In</Button>
+                </Link>
+                <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="hero" className="w-full">Get Started</Button>
+                </Link>
               </div>
             </div>
           </motion.div>
