@@ -21,12 +21,6 @@ export const Navbar = () => {
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Dashboard", path: "/dashboard" },
-    { name: "AI Chat", path: "/chat" },
-    { name: "Check-In", path: "/checkin" },
-    { name: "Strategies", path: "/strategies" },
-    { name: "Consultations", path: "/consultations" },
-    { name: "Alerts", path: "/alerts" },
-    { name: "Vault", path: "/vault" },
     { name: "Plans", path: "/plans" },
   ];
 
