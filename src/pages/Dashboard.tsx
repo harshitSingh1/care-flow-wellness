@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
@@ -17,7 +17,13 @@ import {
   AlertTriangle,
   Smile,
   Meh,
-  Frown
+  Frown,
+  MessageSquare,
+  Lightbulb,
+  Video,
+  Bell,
+  FolderLock,
+  ArrowRight
 } from "lucide-react";
 
 interface CheckIn {
@@ -51,6 +57,51 @@ const moodScores: Record<string, number> = {
   anxious: 40,
   sad: 20,
 };
+
+const featureCards = [
+  {
+    title: "AI Chat",
+    description: "Get instant health & wellness guidance",
+    icon: MessageSquare,
+    path: "/chat",
+    gradient: "from-primary to-primary/70",
+  },
+  {
+    title: "Daily Check-In",
+    description: "Track your mood and journal",
+    icon: Heart,
+    path: "/checkin",
+    gradient: "from-secondary to-secondary/70",
+  },
+  {
+    title: "Strategies",
+    description: "Personalized wellness recommendations",
+    icon: Lightbulb,
+    path: "/strategies",
+    gradient: "from-accent to-accent/70",
+  },
+  {
+    title: "Consultations",
+    description: "Book video calls with experts",
+    icon: Video,
+    path: "/consultations",
+    gradient: "from-primary to-secondary",
+  },
+  {
+    title: "Alerts",
+    description: "View health & emotional alerts",
+    icon: Bell,
+    path: "/alerts",
+    gradient: "from-amber-500 to-orange-500",
+  },
+  {
+    title: "Personal Vault",
+    description: "Secure access to your records",
+    icon: FolderLock,
+    path: "/vault",
+    gradient: "from-slate-600 to-slate-800",
+  },
+];
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -87,7 +138,7 @@ export default function Dashboard() {
   };
 
   const calculateMoodTrend = () => {
-    if (checkIns.length < 2) return { trend: "neutral", change: 0 };
+    if (checkIns.length < 2) return { trend: "neutral", change: 0, average: 0 };
     
     const recent = checkIns.slice(0, 7);
     const older = checkIns.slice(7, 14);
@@ -105,14 +156,6 @@ export default function Dashboard() {
     };
   };
 
-  const getMoodDistribution = () => {
-    const distribution: Record<string, number> = {};
-    checkIns.forEach(c => {
-      distribution[c.mood] = (distribution[c.mood] || 0) + 1;
-    });
-    return distribution;
-  };
-
   const getStreakDays = () => {
     if (checkIns.length === 0) return 0;
     
@@ -120,7 +163,6 @@ export default function Dashboard() {
     const today = new Date();
     const lastCheckIn = new Date(checkIns[0].created_at);
     
-    // Check if last check-in was today or yesterday
     const diffDays = Math.floor((today.getTime() - lastCheckIn.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays > 1) return 0;
     
@@ -137,7 +179,6 @@ export default function Dashboard() {
   };
 
   const moodTrend = calculateMoodTrend();
-  const moodDistribution = getMoodDistribution();
   const streakDays = getStreakDays();
   const unreadAlerts = alerts.filter(a => !a.is_read).length;
 
@@ -160,120 +201,147 @@ export default function Dashboard() {
           className="mb-8"
         >
           <h1 className="text-3xl font-bold text-foreground mb-2">Wellness Dashboard</h1>
-          <p className="text-muted-foreground">Track your emotional and health patterns</p>
+          <p className="text-muted-foreground">Your central hub for health & mental wellness</p>
         </motion.div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Heart className="w-4 h-4" />
-                  Wellness Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold text-foreground">{moodTrend.average || 0}%</span>
-                  {moodTrend.trend === "up" ? (
-                    <TrendingUp className="w-5 h-5 text-green-500 mb-1" />
-                  ) : moodTrend.trend === "down" ? (
-                    <TrendingDown className="w-5 h-5 text-red-500 mb-1" />
-                  ) : null}
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Wellness Score</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-2xl font-bold">{moodTrend.average || 0}%</span>
+                      {moodTrend.trend === "up" ? (
+                        <TrendingUp className="w-4 h-4 text-green-500" />
+                      ) : moodTrend.trend === "down" ? (
+                        <TrendingDown className="w-4 h-4 text-red-500" />
+                      ) : null}
+                    </div>
+                  </div>
+                  <Heart className="w-8 h-8 text-primary/50" />
                 </div>
-                <Progress value={moodTrend.average || 0} className="mt-2" />
+                <Progress value={moodTrend.average || 0} className="mt-2 h-1" />
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <Card className="bg-gradient-to-br from-secondary/20 to-secondary/5 border-secondary/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Check-in Streak</p>
+                    <span className="text-2xl font-bold">{streakDays} days</span>
+                  </div>
+                  <Calendar className="w-8 h-8 text-secondary/50" />
+                </div>
               </CardContent>
             </Card>
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Card className="bg-gradient-to-br from-secondary/30 to-secondary/10 border-secondary/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Check-in Streak
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold text-foreground">{streakDays}</span>
-                  <span className="text-muted-foreground mb-1">days</span>
+            <Card className="bg-gradient-to-br from-accent/20 to-accent/5 border-accent/20">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Check-ins</p>
+                    <span className="text-2xl font-bold">{checkIns.length}</span>
+                  </div>
+                  <Brain className="w-8 h-8 text-accent/50" />
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">Keep it up! Consistency matters.</p>
               </CardContent>
             </Card>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card className="bg-gradient-to-br from-accent/30 to-accent/10 border-accent/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Brain className="w-4 h-4" />
-                  Total Check-ins
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold text-foreground">{checkIns.length}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">Building self-awareness</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
             <Card className={`bg-gradient-to-br ${unreadAlerts > 0 ? 'from-destructive/20 to-destructive/5 border-destructive/30' : 'from-muted to-muted/50 border-muted'}`}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  Active Alerts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold text-foreground">{unreadAlerts}</span>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Active Alerts</p>
+                    <span className="text-2xl font-bold">{unreadAlerts}</span>
+                  </div>
+                  <AlertTriangle className={`w-8 h-8 ${unreadAlerts > 0 ? 'text-destructive/50' : 'text-muted-foreground/30'}`} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {unreadAlerts > 0 ? "Needs attention" : "All clear!"}
-                </p>
               </CardContent>
             </Card>
           </motion.div>
         </div>
 
-        {/* Mood Distribution & Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Feature Cards Grid */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mb-8"
+        >
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary" />
+            Quick Access
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {featureCards.map((feature, index) => (
+              <motion.div
+                key={feature.path}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3 + index * 0.05 }}
+              >
+                <Link to={feature.path}>
+                  <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer group overflow-hidden">
+                    <CardContent className="p-4 flex flex-col items-center text-center">
+                      <div className={`p-3 rounded-2xl bg-gradient-to-br ${feature.gradient} mb-3 group-hover:scale-110 transition-transform`}>
+                        <feature.icon className="w-6 h-6 text-white" />
+                      </div>
+                      <h3 className="font-semibold text-sm mb-1">{feature.title}</h3>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{feature.description}</p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Recent Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-primary" />
-                  Mood Distribution
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-primary" />
+                    Recent Check-ins
+                  </span>
+                  <Link to="/checkin" className="text-sm text-primary hover:underline flex items-center gap-1">
+                    View all <ArrowRight className="w-4 h-4" />
+                  </Link>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {Object.keys(moodDistribution).length > 0 ? (
-                  <div className="space-y-4">
-                    {Object.entries(moodDistribution).map(([mood, count]) => (
-                      <div key={mood} className="flex items-center gap-3">
-                        {moodIcons[mood] || <Meh className="w-5 h-5" />}
-                        <span className="capitalize w-20 text-sm">{mood}</span>
-                        <div className="flex-1 bg-muted rounded-full h-3">
-                          <div 
-                            className="bg-primary rounded-full h-3 transition-all"
-                            style={{ width: `${(count / checkIns.length) * 100}%` }}
-                          />
+                {checkIns.length > 0 ? (
+                  <div className="space-y-2">
+                    {checkIns.slice(0, 4).map((checkIn) => (
+                      <div key={checkIn.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
+                        {moodIcons[checkIn.mood] || <Meh className="w-5 h-5" />}
+                        <div className="flex-1 min-w-0">
+                          <span className="capitalize font-medium text-sm">{checkIn.mood}</span>
+                          {checkIn.journal && (
+                            <p className="text-xs text-muted-foreground truncate">{checkIn.journal}</p>
+                          )}
                         </div>
-                        <span className="text-sm text-muted-foreground w-12 text-right">
-                          {Math.round((count / checkIns.length) * 100)}%
-                        </span>
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {new Date(checkIn.created_at).toLocaleDateString()}
+                        </Badge>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    Start checking in to see your mood patterns
+                  <p className="text-muted-foreground text-center py-6 text-sm">
+                    No check-ins yet. Start your wellness journey!
                   </p>
                 )}
               </CardContent>
@@ -282,85 +350,52 @@ export default function Dashboard() {
 
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }}>
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  Recent Check-ins
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    Recent Alerts
+                  </span>
+                  <Link to="/alerts" className="text-sm text-primary hover:underline flex items-center gap-1">
+                    View all <ArrowRight className="w-4 h-4" />
+                  </Link>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {checkIns.length > 0 ? (
-                  <div className="space-y-3">
-                    {checkIns.slice(0, 5).map((checkIn) => (
-                      <div key={checkIn.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                        {moodIcons[checkIn.mood] || <Meh className="w-5 h-5" />}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="capitalize font-medium text-sm">{checkIn.mood}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {new Date(checkIn.created_at).toLocaleDateString()}
+                {alerts.length > 0 ? (
+                  <div className="space-y-2">
+                    {alerts.slice(0, 3).map((alert) => (
+                      <div 
+                        key={alert.id} 
+                        className={`p-3 rounded-lg border ${
+                          alert.severity === 'high' 
+                            ? 'bg-destructive/10 border-destructive/30' 
+                            : 'bg-muted/50 border-muted'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <Badge variant={alert.severity === 'high' ? 'destructive' : 'secondary'} className="text-xs mb-1">
+                              {alert.alert_type}
                             </Badge>
+                            <p className="text-sm">{alert.message}</p>
                           </div>
-                          {checkIn.journal && (
-                            <p className="text-xs text-muted-foreground truncate mt-1">
-                              {checkIn.journal}
-                            </p>
-                          )}
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {new Date(alert.created_at).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    No check-ins yet. Start your wellness journey today!
+                  <p className="text-muted-foreground text-center py-6 text-sm">
+                    No alerts. All clear!
                   </p>
                 )}
               </CardContent>
             </Card>
           </motion.div>
         </div>
-
-        {/* Alerts Preview */}
-        {alerts.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  Recent Alerts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {alerts.slice(0, 3).map((alert) => (
-                    <div 
-                      key={alert.id} 
-                      className={`p-4 rounded-lg border ${
-                        alert.severity === 'high' 
-                          ? 'bg-destructive/10 border-destructive/30' 
-                          : alert.severity === 'medium'
-                          ? 'bg-amber-500/10 border-amber-500/30'
-                          : 'bg-muted border-muted'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <Badge variant={alert.severity === 'high' ? 'destructive' : 'secondary'} className="mb-2">
-                            {alert.alert_type}
-                          </Badge>
-                          <p className="text-sm">{alert.message}</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(alert.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
       </main>
       
       <Footer />
