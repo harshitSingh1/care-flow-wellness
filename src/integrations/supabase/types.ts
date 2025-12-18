@@ -158,6 +158,45 @@ export type Database = {
         }
         Relationships: []
       }
+      medical_documents: {
+        Row: {
+          created_at: string
+          description: string | null
+          document_date: string | null
+          file_name: string
+          file_size: number | null
+          file_type: string
+          file_url: string
+          hospital_name: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          document_date?: string | null
+          file_name: string
+          file_size?: number | null
+          file_type: string
+          file_url: string
+          hospital_name?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          document_date?: string | null
+          file_name?: string
+          file_size?: number | null
+          file_type?: string
+          file_url?: string
+          hospital_name?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

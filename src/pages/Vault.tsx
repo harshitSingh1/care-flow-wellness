@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,14 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Lock, 
   Search, 
@@ -27,29 +30,57 @@ import {
   FileText,
   Shield,
   Clock,
-  ChevronRight
+  ChevronRight,
+  Upload,
+  File,
+  Image,
+  Trash2,
+  Download,
+  Plus
 } from "lucide-react";
 
 interface TimelineItem {
   id: string;
-  type: 'chat' | 'checkin' | 'review' | 'alert' | 'consultation';
+  type: 'chat' | 'checkin' | 'review' | 'alert' | 'consultation' | 'document';
   title: string;
   description: string;
   date: string;
   metadata?: Record<string, any>;
 }
 
+interface MedicalDocument {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  file_size: number | null;
+  description: string | null;
+  document_date: string | null;
+  hospital_name: string | null;
+  created_at: string;
+}
+
 export default function Vault() {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [documents, setDocuments] = useState<MedicalDocument[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadForm, setUploadForm] = useState({
+    description: '',
+    documentDate: '',
+    hospitalName: '',
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Simple PIN - in production, this should be stored securely per user
   const VAULT_PIN = '1234';
 
   useEffect(() => {
@@ -75,12 +106,13 @@ export default function Vault() {
   const loadVaultData = async () => {
     setLoading(true);
     try {
-      const [chatsRes, checkInsRes, reviewsRes, alertsRes, consultationsRes] = await Promise.all([
+      const [chatsRes, checkInsRes, reviewsRes, alertsRes, consultationsRes, documentsRes] = await Promise.all([
         supabase.from('chat_messages').select('*').order('created_at', { ascending: false }),
         supabase.from('check_ins').select('*').order('created_at', { ascending: false }),
         supabase.from('doctor_reviews').select('*').order('created_at', { ascending: false }),
         supabase.from('alerts').select('*').order('created_at', { ascending: false }),
         supabase.from('consultations').select('*').order('created_at', { ascending: false }),
+        supabase.from('medical_documents').select('*').order('created_at', { ascending: false }),
       ]);
 
       const items: TimelineItem[] = [];
@@ -155,6 +187,26 @@ export default function Vault() {
         });
       }
 
+      // Process medical documents
+      if (documentsRes.data) {
+        setDocuments(documentsRes.data);
+        documentsRes.data.forEach(doc => {
+          items.push({
+            id: doc.id,
+            type: 'document',
+            title: doc.file_name,
+            description: doc.description || `Medical document from ${doc.hospital_name || 'Unknown hospital'}`,
+            date: doc.created_at,
+            metadata: { 
+              fileType: doc.file_type, 
+              fileUrl: doc.file_url, 
+              hospitalName: doc.hospital_name,
+              documentDate: doc.document_date 
+            },
+          });
+        });
+      }
+
       // Sort by date
       items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimeline(items);
@@ -165,6 +217,123 @@ export default function Vault() {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Please select a file smaller than 10MB",
+          variant: "destructive",
+        });
+        return;
+      }
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      toast({
+        title: "No file selected",
+        description: "Please select a file to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('medical-documents')
+        .upload(fileName, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('medical-documents')
+        .getPublicUrl(fileName);
+
+      // Save document record
+      const { error: dbError } = await supabase
+        .from('medical_documents')
+        .insert({
+          user_id: user.id,
+          file_name: selectedFile.name,
+          file_url: urlData.publicUrl,
+          file_type: selectedFile.type,
+          file_size: selectedFile.size,
+          description: uploadForm.description || null,
+          document_date: uploadForm.documentDate || null,
+          hospital_name: uploadForm.hospitalName || null,
+        });
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: "Document uploaded",
+        description: "Your medical document has been securely stored",
+      });
+
+      setUploadDialogOpen(false);
+      setSelectedFile(null);
+      setUploadForm({ description: '', documentDate: '', hospitalName: '' });
+      loadVaultData();
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload document",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string, fileUrl: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Extract file path from URL
+      const urlParts = fileUrl.split('/');
+      const filePath = `${user.id}/${urlParts[urlParts.length - 1]}`;
+
+      // Delete from storage
+      await supabase.storage.from('medical-documents').remove([filePath]);
+
+      // Delete from database
+      const { error } = await supabase
+        .from('medical_documents')
+        .delete()
+        .eq('id', docId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Document deleted",
+        description: "The document has been removed from your vault",
+      });
+
+      loadVaultData();
+    } catch (error: any) {
+      toast({
+        title: "Delete failed",
+        description: error.message || "Failed to delete document",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'chat': return <MessageSquare className="w-4 h-4" />;
@@ -172,6 +341,7 @@ export default function Vault() {
       case 'review': return <Stethoscope className="w-4 h-4" />;
       case 'alert': return <AlertTriangle className="w-4 h-4" />;
       case 'consultation': return <Calendar className="w-4 h-4" />;
+      case 'document': return <File className="w-4 h-4" />;
       default: return <FileText className="w-4 h-4" />;
     }
   };
@@ -183,6 +353,7 @@ export default function Vault() {
       case 'review': return 'bg-purple-500/20 text-purple-700 dark:text-purple-300';
       case 'alert': return 'bg-amber-500/20 text-amber-700 dark:text-amber-300';
       case 'consultation': return 'bg-green-500/20 text-green-700 dark:text-green-300';
+      case 'document': return 'bg-teal-500/20 text-teal-700 dark:text-teal-300';
       default: return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
     }
   };
@@ -202,6 +373,7 @@ export default function Vault() {
     reviews: timeline.filter(i => i.type === 'review').length,
     alerts: timeline.filter(i => i.type === 'alert').length,
     consultations: timeline.filter(i => i.type === 'consultation').length,
+    documents: timeline.filter(i => i.type === 'document').length,
   };
 
   if (!isUnlocked) {
@@ -292,17 +464,114 @@ export default function Vault() {
               </p>
             </div>
             
-            <Button variant="outline" onClick={() => setIsUnlocked(false)} className="gap-2">
-              <Lock className="w-4 h-4" />
-              Lock Vault
-            </Button>
+            <div className="flex gap-2">
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Upload className="w-4 h-4" />
+                    Upload Document
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Upload Medical Document</DialogTitle>
+                    <DialogDescription>
+                      Upload your previous medical records, reports, or images
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div 
+                      className="border-2 border-dashed border-muted rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        accept="image/*,.pdf,.doc,.docx"
+                        onChange={handleFileSelect}
+                      />
+                      {selectedFile ? (
+                        <div className="space-y-2">
+                          <File className="w-10 h-10 mx-auto text-primary" />
+                          <p className="font-medium">{selectedFile.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <Plus className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                          <p className="font-medium">Click to select file</p>
+                          <p className="text-sm text-muted-foreground">
+                            Images, PDFs, or documents (max 10MB)
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="hospital">Hospital/Clinic Name</Label>
+                      <Input
+                        id="hospital"
+                        placeholder="e.g., City General Hospital"
+                        value={uploadForm.hospitalName}
+                        onChange={(e) => setUploadForm(prev => ({ ...prev, hospitalName: e.target.value }))}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="docDate">Document Date</Label>
+                      <Input
+                        id="docDate"
+                        type="date"
+                        value={uploadForm.documentDate}
+                        onChange={(e) => setUploadForm(prev => ({ ...prev, documentDate: e.target.value }))}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description (Optional)</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Brief description of the document..."
+                        value={uploadForm.description}
+                        onChange={(e) => setUploadForm(prev => ({ ...prev, description: e.target.value }))}
+                      />
+                    </div>
+                    
+                    <Button 
+                      className="w-full" 
+                      onClick={handleUpload}
+                      disabled={!selectedFile || uploading}
+                    >
+                      {uploading ? (
+                        <>Uploading...</>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Document
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              
+              <Button variant="outline" onClick={() => setIsUnlocked(false)} className="gap-2">
+                <Lock className="w-4 h-4" />
+                Lock Vault
+              </Button>
+            </div>
           </div>
         </motion.div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-8">
           {[
             { label: 'Total Records', value: stats.total, icon: FileText },
+            { label: 'Documents', value: stats.documents, icon: File },
             { label: 'Chat Messages', value: stats.chats, icon: MessageSquare },
             { label: 'Check-ins', value: stats.checkins, icon: Heart },
             { label: 'Reviews', value: stats.reviews, icon: Stethoscope },
@@ -341,6 +610,7 @@ export default function Vault() {
           <div className="flex gap-2 overflow-x-auto pb-2">
             {[
               { id: 'all', label: 'All' },
+              { id: 'document', label: 'Documents' },
               { id: 'chat', label: 'Chats' },
               { id: 'checkin', label: 'Check-ins' },
               { id: 'review', label: 'Reviews' },
@@ -386,19 +656,51 @@ export default function Vault() {
                           <Badge variant="outline" className="capitalize text-xs">
                             {item.type}
                           </Badge>
+                          {item.type === 'document' && item.metadata?.hospitalName && (
+                            <Badge variant="secondary" className="text-xs">
+                              {item.metadata.hospitalName}
+                            </Badge>
+                          )}
                         </div>
                         
                         <p className="text-sm text-muted-foreground mb-2">
                           {item.description}
                         </p>
                         
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          {new Date(item.date).toLocaleString()}
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(item.date).toLocaleString()}
+                          </span>
+                          {item.type === 'document' && item.metadata?.documentDate && (
+                            <span>Doc date: {new Date(item.metadata.documentDate).toLocaleDateString()}</span>
+                          )}
                         </div>
                       </div>
                       
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      {item.type === 'document' && item.metadata?.fileUrl && (
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => window.open(item.metadata?.fileUrl, '_blank')}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteDocument(item.id, item.metadata?.fileUrl)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {item.type !== 'document' && (
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -412,12 +714,16 @@ export default function Vault() {
               <h3 className="font-medium mb-2">
                 {searchQuery ? 'No matching records' : 'No records yet'}
               </h3>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground mb-4">
                 {searchQuery 
                   ? 'Try adjusting your search or filters'
                   : 'Your health journey records will appear here'
                 }
               </p>
+              <Button onClick={() => setUploadDialogOpen(true)} className="gap-2">
+                <Upload className="w-4 h-4" />
+                Upload Your First Document
+              </Button>
             </CardContent>
           </Card>
         )}
