@@ -6,6 +6,35 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain } from "lucide-react";
+
+// Simple markdown parser for basic formatting
+const parseMarkdown = (text: string): React.ReactNode[] => {
+  const lines = text.split('\n');
+  const result: React.ReactNode[] = [];
+  
+  lines.forEach((line, lineIndex) => {
+    // Remove markdown bold/italic markers and just show clean text
+    let cleanLine = line
+      .replace(/\*\*\*(.*?)\*\*\*/g, '$1') // bold italic
+      .replace(/\*\*(.*?)\*\*/g, '$1') // bold
+      .replace(/\*(.*?)\*/g, '$1') // italic
+      .replace(/^#+\s*/, '') // headers
+      .replace(/^[-*]\s*/, '• '); // bullet points
+    
+    if (cleanLine.trim()) {
+      result.push(
+        <span key={lineIndex}>
+          {cleanLine}
+          {lineIndex < lines.length - 1 && <br />}
+        </span>
+      );
+    } else if (lineIndex < lines.length - 1) {
+      result.push(<br key={lineIndex} />);
+    }
+  });
+  
+  return result;
+};
 import { useToast } from "@/hooks/use-toast";
 import { chatService } from "@/lib/supabase";
 import { supabase } from "@/integrations/supabase/client";
@@ -133,23 +162,23 @@ const Chat = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       <Navbar />
       
-      <div className="flex-1 pt-20 pb-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col max-w-4xl">
+      <div className="flex-1 pt-20 pb-4 flex flex-col overflow-hidden">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col max-w-4xl flex-1 overflow-hidden">
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6"
+            className="mb-4 shrink-0"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-gradient-primary p-2 rounded-2xl">
                 <Sparkles className="h-6 w-6 text-primary-foreground" />
               </div>
-              <h1 className="text-3xl font-bold">AI Health Assistant</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold">AI Health Assistant</h1>
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               Get instant guidance, verified by healthcare professionals
             </p>
           </motion.div>
@@ -158,10 +187,10 @@ const Chat = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6"
+              className="mb-4 shrink-0"
             >
               <p className="text-sm text-muted-foreground mb-3">Quick suggestions:</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {quickSuggestions.map((suggestion, index) => (
                   <motion.button
                     key={index}
@@ -169,20 +198,20 @@ const Chat = () => {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: index * 0.1 }}
                     onClick={() => handleQuickSuggestion(suggestion.text)}
-                    className="flex items-center gap-3 p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 text-left group"
+                    className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 text-left group"
                   >
                     <div className={`p-2 rounded-xl bg-gradient-${suggestion.category === "mental" ? "secondary" : "primary"} group-hover:scale-110 transition-transform`}>
                       <suggestion.icon className="h-4 w-4 text-white" />
                     </div>
-                    <span className="text-sm font-medium">{suggestion.text}</span>
+                    <span className="text-xs sm:text-sm font-medium">{suggestion.text}</span>
                   </motion.button>
                 ))}
               </div>
             </motion.div>
           )}
 
-          <Card className="flex-1 p-6 mb-6 overflow-y-auto bg-card/30 backdrop-blur-sm border-border/50">
-            <div className="space-y-6">
+          <Card className="flex-1 p-4 sm:p-6 mb-4 overflow-hidden bg-card/30 backdrop-blur-sm border-border/50 flex flex-col min-h-0">
+            <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6">
               <AnimatePresence>
                 {messages.map((message) => (
                   <motion.div
@@ -190,22 +219,24 @@ const Chat = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                    className={`flex gap-2 sm:gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     {message.role === "assistant" && (
                       <div className="bg-gradient-primary p-2 rounded-2xl h-fit shrink-0">
-                        <Bot className="h-5 w-5 text-primary-foreground" />
+                        <Bot className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
                       </div>
                     )}
                     
                     <div
-                      className={`max-w-[80%] p-4 rounded-2xl ${
+                      className={`max-w-[85%] sm:max-w-[80%] p-3 sm:p-4 rounded-2xl ${
                         message.role === "user"
                           ? "bg-gradient-primary text-primary-foreground"
                           : "bg-muted/50"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      <div className="text-sm sm:text-base leading-relaxed">
+                        {message.role === "assistant" ? parseMarkdown(message.content) : message.content}
+                      </div>
                       <p className="text-xs opacity-70 mt-2">
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -213,7 +244,7 @@ const Chat = () => {
 
                     {message.role === "user" && (
                       <div className="bg-gradient-accent p-2 rounded-2xl h-fit shrink-0">
-                        <User className="h-5 w-5 text-accent-foreground" />
+                        <User className="h-4 w-4 sm:h-5 sm:w-5 text-accent-foreground" />
                       </div>
                     )}
                   </motion.div>
@@ -224,12 +255,12 @@ const Chat = () => {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="flex gap-3"
+                  className="flex gap-2 sm:gap-3"
                 >
                   <div className="bg-gradient-primary p-2 rounded-2xl h-fit">
-                    <Bot className="h-5 w-5 text-primary-foreground" />
+                    <Bot className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
                   </div>
-                  <div className="bg-muted/50 p-4 rounded-2xl">
+                  <div className="bg-muted/50 p-3 sm:p-4 rounded-2xl">
                     <div className="flex gap-2">
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
@@ -243,31 +274,29 @@ const Chat = () => {
             </div>
           </Card>
 
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3 shrink-0">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Type your health question or wellness concern..."
-              className="flex-1 rounded-full px-6 py-6 text-base bg-card/50 backdrop-blur-sm border-border/50 focus-visible:ring-primary"
+              placeholder="Type your health question..."
+              className="flex-1 rounded-full px-4 sm:px-6 py-5 sm:py-6 text-sm sm:text-base bg-card/50 backdrop-blur-sm border-border/50 focus-visible:ring-primary"
             />
             <Button
               onClick={handleSend}
               disabled={!input.trim() || isTyping}
               size="lg"
-              className="rounded-full px-8"
+              className="rounded-full px-6 sm:px-8"
             >
               <Send className="h-5 w-5" />
             </Button>
           </div>
 
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            💡 Important recommendations are automatically reviewed by certified healthcare professionals
+          <p className="text-xs text-muted-foreground text-center mt-3 shrink-0">
+            💡 Important recommendations are reviewed by certified healthcare professionals
           </p>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 };
