@@ -33,41 +33,49 @@ serve(async (req) => {
 
     const { messages, messageType } = await req.json();
 
-    // Construct system prompt based on message type
+    // Construct system prompt to return structured JSON
     const systemPrompts = {
-      health: `You are a concise health advisor for CareForAll. 
+      health: `You are a health advisor for CareForAll. You MUST respond with a valid JSON object in this exact format:
 
-CRITICAL RULES:
-1. Keep responses SHORT (max 3-5 bullet points)
-2. Be direct and to-the-point
-3. DO NOT use markdown formatting (no *, **, #, etc.)
-4. Use plain text only with simple dashes (-) for lists
-5. Each point should be one clear sentence
+{
+  "summary": "A brief 1-2 sentence summary of the health concern and general advice",
+  "remedies": [
+    "First specific remedy or solution",
+    "Second remedy or solution",
+    "Third remedy or solution"
+  ],
+  "precautions": "Important precautions to keep in mind (1-2 sentences)",
+  "consultDoctor": "When the user should see a doctor (1-2 sentences)"
+}
 
-Provide:
-- Home remedies
-- Diet tips  
-- When to see a doctor
+Rules:
+- Keep each remedy to ONE clear sentence
+- Provide 3-5 remedies maximum
+- Be practical and actionable
+- Include home remedies and lifestyle tips
+- ONLY output the JSON object, nothing else`,
+      wellness: `You are a mental wellness companion for CareForAll. You MUST respond with a valid JSON object in this exact format:
 
-End with a brief disclaimer that this is general guidance only.`,
-      wellness: `You are a concise mental wellness companion for CareForAll.
+{
+  "summary": "A brief empathetic 1-2 sentence acknowledgment and overview",
+  "remedies": [
+    "First coping strategy or technique",
+    "Second coping strategy",
+    "Third technique"
+  ],
+  "precautions": "Important self-care reminders (1-2 sentences)",
+  "consultDoctor": "When professional help may be beneficial (1-2 sentences)"
+}
 
-CRITICAL RULES:
-1. Keep responses SHORT (max 3-5 bullet points)
-2. Be direct and empathetic
-3. DO NOT use markdown formatting (no *, **, #, etc.)
-4. Use plain text only with simple dashes (-) for lists
-5. Each point should be one clear sentence
-
-Provide:
-- Coping strategies
-- Quick techniques
-- Self-care tips
-
-Be warm but brief.`
+Rules:
+- Keep each strategy to ONE clear sentence
+- Provide 3-5 strategies maximum
+- Be warm and supportive
+- Include practical techniques they can try now
+- ONLY output the JSON object, nothing else`
     };
 
-    // Call Lovable AI
+    // Call Lovable AI with tool calling for structured output
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -80,6 +88,31 @@ Be warm but brief.`
           { role: "system", content: systemPrompts[messageType as 'health' | 'wellness'] },
           ...messages,
         ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "provide_health_guidance",
+              description: "Provide structured health guidance with summary, remedies, precautions, and when to consult a doctor",
+              parameters: {
+                type: "object",
+                properties: {
+                  summary: { type: "string", description: "Brief 1-2 sentence summary" },
+                  remedies: { 
+                    type: "array", 
+                    items: { type: "string" },
+                    description: "List of 3-5 specific remedies or solutions"
+                  },
+                  precautions: { type: "string", description: "Important precautions" },
+                  consultDoctor: { type: "string", description: "When to see a doctor" }
+                },
+                required: ["summary", "remedies", "precautions", "consultDoctor"],
+                additionalProperties: false
+              }
+            }
+          }
+        ],
+        tool_choice: { type: "function", function: { name: "provide_health_guidance" } }
       }),
     });
 
@@ -90,10 +123,33 @@ Be warm but brief.`
     }
 
     const aiData = await aiResponse.json();
-    const assistantMessage = aiData.choices[0].message.content;
+    console.log("AI response:", JSON.stringify(aiData, null, 2));
+    
+    let structuredResponse;
+    
+    // Check if response has tool calls
+    if (aiData.choices[0].message.tool_calls) {
+      const toolCall = aiData.choices[0].message.tool_calls[0];
+      structuredResponse = JSON.parse(toolCall.function.arguments);
+    } else {
+      // Fallback: try to parse content as JSON
+      const content = aiData.choices[0].message.content;
+      try {
+        structuredResponse = JSON.parse(content);
+      } catch {
+        // If parsing fails, create a simple structured response
+        structuredResponse = {
+          summary: content,
+          remedies: [],
+          precautions: "Please consult a healthcare provider for personalized advice.",
+          consultDoctor: "If symptoms persist or worsen, please see a doctor."
+        };
+      }
+    }
 
-    // Save messages to database
+    // Save messages to database (store structured response as JSON string)
     const userMessage = messages[messages.length - 1].content;
+    const assistantContent = JSON.stringify(structuredResponse);
     
     await supabase.from("chat_messages").insert([
       {
@@ -106,11 +162,11 @@ Be warm but brief.`
         user_id: user.id,
         message_type: messageType,
         role: "assistant",
-        content: assistantMessage,
+        content: assistantContent,
       },
     ]);
 
-    return new Response(JSON.stringify({ message: assistantMessage }), {
+    return new Response(JSON.stringify({ message: assistantContent, structured: structuredResponse }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

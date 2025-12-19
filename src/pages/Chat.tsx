@@ -1,50 +1,45 @@
 import { useState, useRef, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain } from "lucide-react";
-
-// Simple markdown parser for basic formatting
-const parseMarkdown = (text: string): React.ReactNode[] => {
-  const lines = text.split('\n');
-  const result: React.ReactNode[] = [];
-  
-  lines.forEach((line, lineIndex) => {
-    // Remove markdown bold/italic markers and just show clean text
-    let cleanLine = line
-      .replace(/\*\*\*(.*?)\*\*\*/g, '$1') // bold italic
-      .replace(/\*\*(.*?)\*\*/g, '$1') // bold
-      .replace(/\*(.*?)\*/g, '$1') // italic
-      .replace(/^#+\s*/, '') // headers
-      .replace(/^[-*]\s*/, '• '); // bullet points
-    
-    if (cleanLine.trim()) {
-      result.push(
-        <span key={lineIndex}>
-          {cleanLine}
-          {lineIndex < lines.length - 1 && <br />}
-        </span>
-      );
-    } else if (lineIndex < lines.length - 1) {
-      result.push(<br key={lineIndex} />);
-    }
-  });
-  
-  return result;
-};
+import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain, AlertTriangle, Stethoscope, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { chatService } from "@/lib/supabase";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 
+type StructuredResponse = {
+  summary: string;
+  remedies: string[];
+  precautions: string;
+  consultDoctor: string;
+};
+
 type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  structured?: StructuredResponse;
   timestamp: Date;
+};
+
+type SelectedRemedies = {
+  [messageId: string]: string[];
+};
+
+const parseStructuredContent = (content: string): StructuredResponse | null => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed.summary && Array.isArray(parsed.remedies)) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 const Chat = () => {
@@ -52,6 +47,8 @@ const Chat = () => {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [selectedRemedies, setSelectedRemedies] = useState<SelectedRemedies>({});
+  const [userId, setUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -72,10 +69,30 @@ const Chat = () => {
         return;
       }
       setIsAuthenticated(true);
+      setUserId(user.id);
       await loadMessages();
+      await loadSelectedRemedies(user.id);
     };
     checkAuth();
   }, [navigate]);
+
+  const loadSelectedRemedies = async (uid: string) => {
+    const { data, error } = await supabase
+      .from('selected_remedies')
+      .select('*')
+      .eq('user_id', uid);
+    
+    if (!error && data) {
+      const grouped: SelectedRemedies = {};
+      data.forEach(item => {
+        if (!grouped[item.message_id]) {
+          grouped[item.message_id] = [];
+        }
+        grouped[item.message_id].push(item.remedy_text);
+      });
+      setSelectedRemedies(grouped);
+    }
+  };
 
   const loadMessages = async () => {
     try {
@@ -90,12 +107,16 @@ const Chat = () => {
           },
         ]);
       } else {
-        const formattedMessages = data.map(msg => ({
-          id: msg.id,
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-          timestamp: new Date(msg.created_at),
-        }));
+        const formattedMessages = data.map(msg => {
+          const structured = msg.role === 'assistant' ? parseStructuredContent(msg.content) : null;
+          return {
+            id: msg.id,
+            role: msg.role as "user" | "assistant",
+            content: msg.content,
+            structured: structured || undefined,
+            timestamp: new Date(msg.created_at),
+          };
+        });
         setMessages(formattedMessages);
       }
     } catch (error) {
@@ -105,6 +126,42 @@ const Chat = () => {
         description: "Failed to load messages",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleRemedyToggle = async (messageId: string, remedy: string, checked: boolean) => {
+    if (!userId) return;
+
+    if (checked) {
+      // Add selection
+      const { error } = await supabase.from('selected_remedies').insert({
+        user_id: userId,
+        message_id: messageId,
+        remedy_text: remedy,
+      });
+      
+      if (!error) {
+        setSelectedRemedies(prev => ({
+          ...prev,
+          [messageId]: [...(prev[messageId] || []), remedy]
+        }));
+        toast({ title: "Remedy saved", description: "Your selection has been recorded." });
+      }
+    } else {
+      // Remove selection
+      const { error } = await supabase
+        .from('selected_remedies')
+        .delete()
+        .eq('user_id', userId)
+        .eq('message_id', messageId)
+        .eq('remedy_text', remedy);
+      
+      if (!error) {
+        setSelectedRemedies(prev => ({
+          ...prev,
+          [messageId]: (prev[messageId] || []).filter(r => r !== remedy)
+        }));
+      }
     }
   };
 
@@ -132,12 +189,11 @@ const Chat = () => {
     try {
       const conversationHistory = messages.map(m => ({ 
         role: m.role, 
-        content: m.content 
+        content: m.structured ? JSON.stringify(m.structured) : m.content 
       }));
       conversationHistory.push({ role: "user", content: userMessage.content });
 
-      const response = await chatService.sendMessage(conversationHistory, 'health');
-      
+      await chatService.sendMessage(conversationHistory, 'health');
       await loadMessages();
       
       toast({
@@ -159,6 +215,80 @@ const Chat = () => {
 
   const handleQuickSuggestion = (text: string) => {
     setInput(text);
+  };
+
+  const renderStructuredResponse = (message: Message) => {
+    const { structured, id } = message;
+    if (!structured) return null;
+
+    const selected = selectedRemedies[id] || [];
+
+    return (
+      <div className="space-y-4">
+        {/* Summary */}
+        <div>
+          <p className="text-sm sm:text-base leading-relaxed">{structured.summary}</p>
+        </div>
+
+        {/* Remedies */}
+        {structured.remedies.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Pill className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">Possible Remedies</span>
+            </div>
+            <div className="space-y-2">
+              {structured.remedies.map((remedy, idx) => (
+                <Card 
+                  key={idx} 
+                  className={`p-3 cursor-pointer transition-all ${
+                    selected.includes(remedy) 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border/50 hover:border-primary/50'
+                  }`}
+                  onClick={() => handleRemedyToggle(id, remedy, !selected.includes(remedy))}
+                >
+                  <div className="flex items-start gap-3">
+                    <Checkbox 
+                      checked={selected.includes(remedy)}
+                      onCheckedChange={(checked) => handleRemedyToggle(id, remedy, !!checked)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span className="text-sm flex-1">{remedy}</span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Precautions */}
+        {structured.precautions && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="h-4 w-4 text-amber-500" />
+              <span className="text-sm font-medium">Precautions</span>
+            </div>
+            <p className="text-sm text-muted-foreground">{structured.precautions}</p>
+          </div>
+        )}
+
+        {/* When to Consult Doctor */}
+        {structured.consultDoctor && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Stethoscope className="h-4 w-4 text-red-500" />
+              <span className="text-sm font-medium">When to Consult a Doctor</span>
+            </div>
+            <p className="text-sm text-muted-foreground">{structured.consultDoctor}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderPlainMessage = (content: string) => {
+    return <p className="text-sm sm:text-base leading-relaxed">{content}</p>;
   };
 
   return (
@@ -234,9 +364,10 @@ const Chat = () => {
                           : "bg-muted/50"
                       }`}
                     >
-                      <div className="text-sm sm:text-base leading-relaxed">
-                        {message.role === "assistant" ? parseMarkdown(message.content) : message.content}
-                      </div>
+                      {message.role === "assistant" && message.structured 
+                        ? renderStructuredResponse(message)
+                        : renderPlainMessage(message.content)
+                      }
                       <p className="text-xs opacity-70 mt-2">
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
