@@ -221,6 +221,30 @@ export type Database = {
         }
         Relationships: []
       }
+      selected_remedies: {
+        Row: {
+          id: string
+          message_id: string
+          remedy_text: string
+          selected_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          remedy_text: string
+          selected_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          remedy_text?: string
+          selected_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
