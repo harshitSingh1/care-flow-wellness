@@ -245,6 +245,51 @@ export type Database = {
         }
         Relationships: []
       }
+      submitted_cases: {
+        Row: {
+          ai_response: string
+          category: string
+          created_at: string
+          id: string
+          message_id: string
+          reviewed_at: string | null
+          reviewer_id: string | null
+          reviewer_notes: string | null
+          selected_remedies: string[]
+          status: string
+          user_id: string
+          user_issue: string
+        }
+        Insert: {
+          ai_response: string
+          category: string
+          created_at?: string
+          id?: string
+          message_id: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_notes?: string | null
+          selected_remedies: string[]
+          status?: string
+          user_id: string
+          user_issue: string
+        }
+        Update: {
+          ai_response?: string
+          category?: string
+          created_at?: string
+          id?: string
+          message_id?: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_notes?: string | null
+          selected_remedies?: string[]
+          status?: string
+          user_id?: string
+          user_issue?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

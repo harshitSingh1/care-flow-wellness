@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain, AlertTriangle, Stethoscope, Shield } from "lucide-react";
+import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain, Shield, Stethoscope, CheckCircle, Clock, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { chatService } from "@/lib/supabase";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,10 +25,16 @@ type Message = {
   content: string;
   structured?: StructuredResponse;
   timestamp: Date;
+  previousUserMessage?: string;
 };
 
 type SelectedRemedies = {
   [messageId: string]: string[];
+};
+
+type SubmittedCase = {
+  messageId: string;
+  status: string;
 };
 
 const parseStructuredContent = (content: string): StructuredResponse | null => {
@@ -48,7 +55,9 @@ const Chat = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedRemedies, setSelectedRemedies] = useState<SelectedRemedies>({});
+  const [submittedCases, setSubmittedCases] = useState<SubmittedCase[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -72,9 +81,21 @@ const Chat = () => {
       setUserId(user.id);
       await loadMessages();
       await loadSelectedRemedies(user.id);
+      await loadSubmittedCases(user.id);
     };
     checkAuth();
   }, [navigate]);
+
+  const loadSubmittedCases = async (uid: string) => {
+    const { data, error } = await supabase
+      .from('submitted_cases')
+      .select('message_id, status')
+      .eq('user_id', uid);
+    
+    if (!error && data) {
+      setSubmittedCases(data.map(c => ({ messageId: c.message_id, status: c.status })));
+    }
+  };
 
   const loadSelectedRemedies = async (uid: string) => {
     const { data, error } = await supabase
@@ -107,16 +128,28 @@ const Chat = () => {
           },
         ]);
       } else {
-        const formattedMessages = data.map(msg => {
+        const formattedMessages: Message[] = [];
+        let lastUserMessage = "";
+        
+        data.forEach(msg => {
           const structured = msg.role === 'assistant' ? parseStructuredContent(msg.content) : null;
-          return {
+          const message: Message = {
             id: msg.id,
             role: msg.role as "user" | "assistant",
             content: msg.content,
             structured: structured || undefined,
             timestamp: new Date(msg.created_at),
           };
+          
+          if (msg.role === 'user') {
+            lastUserMessage = msg.content;
+          } else if (msg.role === 'assistant') {
+            message.previousUserMessage = lastUserMessage;
+          }
+          
+          formattedMessages.push(message);
         });
+        
         setMessages(formattedMessages);
       }
     } catch (error) {
@@ -133,7 +166,6 @@ const Chat = () => {
     if (!userId) return;
 
     if (checked) {
-      // Add selection
       const { error } = await supabase.from('selected_remedies').insert({
         user_id: userId,
         message_id: messageId,
@@ -145,10 +177,8 @@ const Chat = () => {
           ...prev,
           [messageId]: [...(prev[messageId] || []), remedy]
         }));
-        toast({ title: "Remedy saved", description: "Your selection has been recorded." });
       }
     } else {
-      // Remove selection
       const { error } = await supabase
         .from('selected_remedies')
         .delete()
@@ -163,6 +193,66 @@ const Chat = () => {
         }));
       }
     }
+  };
+
+  const determineCategory = (userIssue: string): 'medical' | 'mental' => {
+    const mentalKeywords = ['stress', 'anxiety', 'depress', 'sad', 'worry', 'mental', 'emotion', 'mood', 'feeling', 'panic', 'fear', 'lonely', 'overwhelm', 'sleep', 'insomnia'];
+    const lowerIssue = userIssue.toLowerCase();
+    const isMental = mentalKeywords.some(keyword => lowerIssue.includes(keyword));
+    return isMental ? 'mental' : 'medical';
+  };
+
+  const handleSubmitForReview = async (message: Message) => {
+    if (!userId || !message.structured) return;
+    
+    const selected = selectedRemedies[message.id] || [];
+    if (selected.length === 0) {
+      toast({
+        title: "No remedies selected",
+        description: "Please select at least one remedy before proceeding.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmitting(message.id);
+
+    try {
+      const userIssue = message.previousUserMessage || "Health concern";
+      const category = determineCategory(userIssue);
+
+      const { error } = await supabase.from('submitted_cases').insert({
+        user_id: userId,
+        message_id: message.id,
+        user_issue: userIssue,
+        ai_response: JSON.stringify(message.structured),
+        selected_remedies: selected,
+        category: category,
+        status: 'pending_review',
+      });
+
+      if (error) throw error;
+
+      setSubmittedCases(prev => [...prev, { messageId: message.id, status: 'pending_review' }]);
+
+      toast({
+        title: "Submitted for review",
+        description: `Your case has been sent to a ${category === 'mental' ? 'wellness advisor' : 'doctor'} for verification.`,
+      });
+    } catch (error) {
+      console.error('Error submitting case:', error);
+      toast({
+        title: "Submission failed",
+        description: "Could not submit for review. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const getCaseStatus = (messageId: string) => {
+    return submittedCases.find(c => c.messageId === messageId);
   };
 
   const quickSuggestions = [
@@ -217,11 +307,31 @@ const Chat = () => {
     setInput(text);
   };
 
+  const renderStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode }> = {
+      pending_review: { label: "Awaiting expert review", variant: "secondary", icon: <Clock className="h-3 w-3" /> },
+      in_review: { label: "Under review", variant: "default", icon: <Stethoscope className="h-3 w-3" /> },
+      approved: { label: "Approved by expert", variant: "default", icon: <CheckCircle className="h-3 w-3" /> },
+      completed: { label: "Review complete", variant: "outline", icon: <CheckCircle className="h-3 w-3" /> },
+    };
+
+    const config = statusConfig[status] || statusConfig.pending_review;
+
+    return (
+      <Badge variant={config.variant} className="flex items-center gap-1 mt-3">
+        {config.icon}
+        {config.label}
+      </Badge>
+    );
+  };
+
   const renderStructuredResponse = (message: Message) => {
     const { structured, id } = message;
     if (!structured) return null;
 
     const selected = selectedRemedies[id] || [];
+    const caseStatus = getCaseStatus(id);
+    const isSubmitted = !!caseStatus;
 
     return (
       <div className="space-y-4">
@@ -236,23 +346,33 @@ const Chat = () => {
             <div className="flex items-center gap-2 mb-2">
               <Pill className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium">Possible Remedies</span>
+              {!isSubmitted && selected.length > 0 && (
+                <Badge variant="outline" className="ml-auto text-xs">
+                  {selected.length} selected
+                </Badge>
+              )}
             </div>
             <div className="space-y-2">
               {structured.remedies.map((remedy, idx) => (
                 <Card 
                   key={idx} 
-                  className={`p-3 cursor-pointer transition-all ${
-                    selected.includes(remedy) 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border/50 hover:border-primary/50'
+                  className={`p-3 transition-all ${
+                    isSubmitted 
+                      ? selected.includes(remedy) 
+                        ? 'border-primary bg-primary/5' 
+                        : 'opacity-50'
+                      : selected.includes(remedy) 
+                        ? 'border-primary bg-primary/5 cursor-pointer' 
+                        : 'border-border/50 hover:border-primary/50 cursor-pointer'
                   }`}
-                  onClick={() => handleRemedyToggle(id, remedy, !selected.includes(remedy))}
+                  onClick={() => !isSubmitted && handleRemedyToggle(id, remedy, !selected.includes(remedy))}
                 >
                   <div className="flex items-start gap-3">
                     <Checkbox 
                       checked={selected.includes(remedy)}
-                      onCheckedChange={(checked) => handleRemedyToggle(id, remedy, !!checked)}
+                      onCheckedChange={(checked) => !isSubmitted && handleRemedyToggle(id, remedy, !!checked)}
                       onClick={(e) => e.stopPropagation()}
+                      disabled={isSubmitted}
                     />
                     <span className="text-sm flex-1">{remedy}</span>
                   </div>
@@ -282,6 +402,29 @@ const Chat = () => {
             </div>
             <p className="text-sm text-muted-foreground">{structured.consultDoctor}</p>
           </div>
+        )}
+
+        {/* Submit Button or Status */}
+        {isSubmitted ? (
+          renderStatusBadge(caseStatus.status)
+        ) : (
+          selected.length > 0 && (
+            <Button 
+              onClick={() => handleSubmitForReview(message)}
+              disabled={submitting === id}
+              className="w-full mt-3"
+              size="sm"
+            >
+              {submitting === id ? (
+                "Submitting..."
+              ) : (
+                <>
+                  Proceed with Selected Solution
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              )}
+            </Button>
+          )
         )}
       </div>
     );
