@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CaseReviewCard } from "@/components/CaseReviewCard";
 import { toast } from "sonner";
 import { 
-  Stethoscope, 
+  Heart, 
   Clock, 
   CheckCircle2,
   MessageSquare,
@@ -29,20 +29,20 @@ interface SubmittedCase {
   reviewed_at: string | null;
 }
 
-export default function DoctorWorkbench() {
+export default function AdvisorWorkbench() {
   const navigate = useNavigate();
   const [cases, setCases] = useState<SubmittedCase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDoctor, setIsDoctor] = useState(false);
+  const [isAdvisor, setIsAdvisor] = useState(false);
 
   useEffect(() => {
-    checkDoctorAccess();
+    checkAdvisorAccess();
   }, []);
 
-  const checkDoctorAccess = async () => {
+  const checkAdvisorAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      navigate("/doctor-login");
+      navigate("/auth");
       return;
     }
 
@@ -51,15 +51,15 @@ export default function DoctorWorkbench() {
       .select("role")
       .eq("user_id", user.id);
 
-    const hasDocRole = roles?.some(r => r.role === "doctor" || r.role === "admin");
+    const hasAccess = roles?.some(r => r.role === "advisor" || r.role === "admin");
     
-    if (!hasDocRole) {
-      toast.error("Access denied. Doctor credentials required.");
+    if (!hasAccess) {
+      toast.error("Access denied. Advisor credentials required.");
       navigate("/");
       return;
     }
 
-    setIsDoctor(true);
+    setIsAdvisor(true);
     loadCases();
   };
 
@@ -68,7 +68,7 @@ export default function DoctorWorkbench() {
       const { data, error } = await supabase
         .from("submitted_cases")
         .select("*")
-        .eq("category", "medical")
+        .eq("category", "wellness")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -92,7 +92,7 @@ export default function DoctorWorkbench() {
     );
   }
 
-  if (!isDoctor) {
+  if (!isAdvisor) {
     return null;
   }
 
@@ -107,12 +107,12 @@ export default function DoctorWorkbench() {
           className="mb-8"
         >
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-primary/10 rounded-xl">
-              <Stethoscope className="w-6 h-6 text-primary" />
+            <div className="p-2 bg-secondary/20 rounded-xl">
+              <Heart className="w-6 h-6 text-secondary" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground">Doctor Workbench</h1>
+            <h1 className="text-3xl font-bold text-foreground">Wellness Advisor Workbench</h1>
           </div>
-          <p className="text-muted-foreground">Review and verify AI-generated health suggestions</p>
+          <p className="text-muted-foreground">Review and verify AI-generated wellness suggestions</p>
         </motion.div>
 
         {/* Stats */}
@@ -135,9 +135,9 @@ export default function DoctorWorkbench() {
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+          <Card className="bg-gradient-to-br from-secondary/20 to-secondary/10 border-secondary/30">
             <CardContent className="pt-4 pb-4 flex items-center gap-4">
-              <MessageSquare className="w-10 h-10 text-primary" />
+              <MessageSquare className="w-10 h-10 text-secondary" />
               <div>
                 <p className="text-2xl font-bold">{cases.length}</p>
                 <p className="text-sm text-muted-foreground">Total Cases</p>
@@ -165,7 +165,7 @@ export default function DoctorWorkbench() {
                   key={caseData.id}
                   caseData={caseData}
                   onUpdate={loadCases}
-                  roleLabel="Doctor"
+                  roleLabel="Advisor"
                 />
               ))}
             </div>
@@ -173,7 +173,7 @@ export default function DoctorWorkbench() {
             <Card className="p-8 text-center">
               <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">All Caught Up!</h3>
-              <p className="text-muted-foreground">No pending medical cases to review.</p>
+              <p className="text-muted-foreground">No pending wellness cases to review.</p>
             </Card>
           )}
         </motion.div>
