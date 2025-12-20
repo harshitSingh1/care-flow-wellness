@@ -16,6 +16,7 @@ import Consultations from "./pages/Consultations";
 import Vault from "./pages/Vault";
 import DoctorLogin from "./pages/DoctorLogin";
 import DoctorWorkbench from "./pages/DoctorWorkbench";
+import AdvisorWorkbench from "./pages/AdvisorWorkbench";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
           <Route path="/vault" element={<Vault />} />
           <Route path="/doctor-login" element={<DoctorLogin />} />
           <Route path="/doctor-workbench" element={<DoctorWorkbench />} />
+          <Route path="/advisor-workbench" element={<AdvisorWorkbench />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
