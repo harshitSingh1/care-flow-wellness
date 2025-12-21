@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain, Shield, Stethoscope, CheckCircle, Clock, ArrowRight } from "lucide-react";
+import { Send, Bot, User, Sparkles, Heart, Pill, Apple, Brain, Shield, Stethoscope, CheckCircle, Clock, ArrowRight, AlertTriangle, BadgeCheck, UserCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { chatService } from "@/lib/supabase";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +35,9 @@ type SelectedRemedies = {
 type SubmittedCase = {
   messageId: string;
   status: string;
+  reviewerNotes?: string | null;
+  category?: string;
+  reviewedAt?: string | null;
 };
 
 const parseStructuredContent = (content: string): StructuredResponse | null => {
@@ -89,11 +92,17 @@ const Chat = () => {
   const loadSubmittedCases = async (uid: string) => {
     const { data, error } = await supabase
       .from('submitted_cases')
-      .select('message_id, status')
+      .select('message_id, status, reviewer_notes, category, reviewed_at')
       .eq('user_id', uid);
     
     if (!error && data) {
-      setSubmittedCases(data.map(c => ({ messageId: c.message_id, status: c.status })));
+      setSubmittedCases(data.map(c => ({ 
+        messageId: c.message_id, 
+        status: c.status,
+        reviewerNotes: c.reviewer_notes,
+        category: c.category,
+        reviewedAt: c.reviewed_at
+      })));
     }
   };
 
@@ -307,21 +316,76 @@ const Chat = () => {
     setInput(text);
   };
 
-  const renderStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode }> = {
+  const renderStatusBadge = (caseData: SubmittedCase) => {
+    const { status, category, reviewerNotes, reviewedAt } = caseData;
+    const isDoctor = category === 'medical';
+    const expertLabel = isDoctor ? 'Doctor' : 'Wellness Advisor';
+    
+    const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; bgClass?: string }> = {
       pending_review: { label: "Awaiting expert review", variant: "secondary", icon: <Clock className="h-3 w-3" /> },
       in_review: { label: "Under review", variant: "default", icon: <Stethoscope className="h-3 w-3" /> },
-      approved: { label: "Approved by expert", variant: "default", icon: <CheckCircle className="h-3 w-3" /> },
-      completed: { label: "Review complete", variant: "outline", icon: <CheckCircle className="h-3 w-3" /> },
+      approved: { 
+        label: `Verified by ${expertLabel}`, 
+        variant: "default", 
+        icon: <BadgeCheck className="h-3 w-3" />,
+        bgClass: "bg-green-600 hover:bg-green-700"
+      },
+      modified: { 
+        label: `Reviewed by ${expertLabel}`, 
+        variant: "default", 
+        icon: <UserCheck className="h-3 w-3" />,
+        bgClass: "bg-blue-600 hover:bg-blue-700"
+      },
+      flagged: { 
+        label: `Safety Warning from ${expertLabel}`, 
+        variant: "destructive", 
+        icon: <AlertTriangle className="h-3 w-3" /> 
+      },
     };
 
     const config = statusConfig[status] || statusConfig.pending_review;
 
     return (
-      <Badge variant={config.variant} className="flex items-center gap-1 mt-3">
-        {config.icon}
-        {config.label}
-      </Badge>
+      <div className="mt-4 space-y-2">
+        <Badge 
+          variant={config.variant} 
+          className={`flex items-center gap-1 ${config.bgClass || ''}`}
+        >
+          {config.icon}
+          {config.label}
+        </Badge>
+        
+        {/* Show expert notes if available */}
+        {reviewerNotes && (status === 'approved' || status === 'modified' || status === 'flagged') && (
+          <div className={`rounded-lg p-3 text-sm ${
+            status === 'flagged' 
+              ? 'bg-destructive/10 border border-destructive/30' 
+              : status === 'modified'
+              ? 'bg-blue-500/10 border border-blue-500/30'
+              : 'bg-green-500/10 border border-green-500/30'
+          }`}>
+            <div className="flex items-start gap-2">
+              {status === 'flagged' ? (
+                <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+              ) : (
+                <BadgeCheck className={`h-4 w-4 shrink-0 mt-0.5 ${status === 'modified' ? 'text-blue-600' : 'text-green-600'}`} />
+              )}
+              <div>
+                <p className="font-medium text-xs mb-1">
+                  {status === 'flagged' ? 'Safety Warning' : 'Expert Notes'}
+                </p>
+                <p className="text-muted-foreground">{reviewerNotes}</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {reviewedAt && (
+          <p className="text-xs text-muted-foreground">
+            Reviewed on {new Date(reviewedAt).toLocaleDateString()}
+          </p>
+        )}
+      </div>
     );
   };
 
@@ -406,7 +470,7 @@ const Chat = () => {
 
         {/* Submit Button or Status */}
         {isSubmitted ? (
-          renderStatusBadge(caseStatus.status)
+          renderStatusBadge(caseStatus)
         ) : (
           selected.length > 0 && (
             <Button 

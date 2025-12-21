@@ -51,6 +51,7 @@ export function CaseReviewCard({ caseData, onUpdate, roleLabel }: CaseReviewCard
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // Update the case status
       const { error } = await supabase
         .from("submitted_cases")
         .update({
@@ -63,6 +64,23 @@ export function CaseReviewCard({ caseData, onUpdate, roleLabel }: CaseReviewCard
 
       if (error) throw error;
 
+      // Create an alert to notify the user
+      const alertMessage = getAlertMessage(newStatus, roleLabel, notes.trim());
+      const alertSeverity = newStatus === "flagged" ? "high" : newStatus === "modified" ? "medium" : "low";
+      
+      const { error: alertError } = await supabase
+        .from("alerts")
+        .insert({
+          user_id: caseData.user_id,
+          alert_type: "case_review",
+          message: alertMessage,
+          severity: alertSeverity,
+        });
+
+      if (alertError) {
+        console.error("Error creating alert:", alertError);
+      }
+
       toast.success(`Case ${newStatus} successfully`);
       setIsExpanded(false);
       setNotes("");
@@ -72,6 +90,20 @@ export function CaseReviewCard({ caseData, onUpdate, roleLabel }: CaseReviewCard
       toast.error("Failed to update case");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const getAlertMessage = (status: string, role: string, reviewerNotes: string): string => {
+    const roleTitle = role === "Doctor" ? "Doctor" : "Wellness Advisor";
+    switch (status) {
+      case "approved":
+        return `✅ Your health case has been verified by a ${roleTitle}. The recommended solution has been approved as safe and appropriate.${reviewerNotes ? ` Note: ${reviewerNotes}` : ""}`;
+      case "modified":
+        return `📝 A ${roleTitle} has reviewed your case and provided modifications. Please check the expert notes: ${reviewerNotes}`;
+      case "flagged":
+        return `⚠️ IMPORTANT: A ${roleTitle} has flagged your case for attention. ${reviewerNotes}. Please consult a healthcare professional immediately.`;
+      default:
+        return `Your case has been reviewed by a ${roleTitle}.`;
     }
   };
 
