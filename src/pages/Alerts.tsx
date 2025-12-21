@@ -13,9 +13,14 @@ import {
   Bell, 
   CheckCircle, 
   AlertTriangle, 
-  AlertCircle,
+  Heart,
   Clock,
-  Filter
+  Filter,
+  Sparkles,
+  MessageCircle,
+  Calendar,
+  Lightbulb,
+  UserRound
 } from "lucide-react";
 
 interface Alert {
@@ -26,6 +31,24 @@ interface Alert {
   is_read: boolean;
   created_at: string;
 }
+
+const alertTypeConfig: Record<string, { icon: typeof Bell; label: string; color: string }> = {
+  wellness_check: { icon: Heart, label: "Wellness Check", color: "text-rose-500" },
+  stress_pattern: { icon: AlertTriangle, label: "Stress Pattern", color: "text-amber-500" },
+  mood_variability: { icon: Sparkles, label: "Mood Insight", color: "text-purple-500" },
+  recurring_symptom: { icon: Heart, label: "Health Insight", color: "text-rose-500" },
+  sleep_pattern: { icon: Clock, label: "Sleep Insight", color: "text-indigo-500" },
+  energy_pattern: { icon: Sparkles, label: "Energy Pattern", color: "text-amber-500" },
+  mental_wellness: { icon: Heart, label: "Mental Wellness", color: "text-teal-500" },
+  social_wellness: { icon: UserRound, label: "Social Wellness", color: "text-blue-500" },
+  work_life_balance: { icon: Calendar, label: "Work-Life Balance", color: "text-orange-500" },
+  check_in_reminder: { icon: MessageCircle, label: "Friendly Reminder", color: "text-primary" },
+  case_reviewed: { icon: CheckCircle, label: "Expert Review", color: "text-emerald-500" },
+  mood: { icon: Heart, label: "Mood Pattern", color: "text-rose-500" },
+  stress: { icon: AlertTriangle, label: "Stress Alert", color: "text-amber-500" },
+  health: { icon: Heart, label: "Health Insight", color: "text-rose-500" },
+  default: { icon: Bell, label: "Notification", color: "text-primary" },
+};
 
 export default function Alerts() {
   const navigate = useNavigate();
@@ -111,26 +134,40 @@ export default function Alerts() {
     }
   };
 
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return <AlertCircle className="w-5 h-5 text-destructive" />;
-      case 'medium':
-        return <AlertTriangle className="w-5 h-5 text-amber-500" />;
-      default:
-        return <Bell className="w-5 h-5 text-primary" />;
-    }
+  const getAlertConfig = (alertType: string) => {
+    return alertTypeConfig[alertType] || alertTypeConfig.default;
   };
 
   const getSeverityStyles = (severity: string) => {
     switch (severity) {
       case 'high':
-        return 'bg-destructive/10 border-destructive/30 hover:bg-destructive/20';
+        return 'bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/15';
       case 'medium':
-        return 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20';
+      case 'warning':
+        return 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15';
       default:
         return 'bg-primary/5 border-primary/20 hover:bg-primary/10';
     }
+  };
+
+  const getSeverityLabel = (severity: string) => {
+    switch (severity) {
+      case 'high':
+        return { label: "Worth attention", variant: "destructive" as const };
+      case 'medium':
+      case 'warning':
+        return { label: "Good to know", variant: "secondary" as const };
+      default:
+        return { label: "For your info", variant: "outline" as const };
+    }
+  };
+
+  const parseMessageForSuggestion = (message: string) => {
+    const parts = message.split('\n\n💡 Suggestion: ');
+    return {
+      mainMessage: parts[0],
+      suggestion: parts[1] || null,
+    };
   };
 
   const filteredAlerts = alerts.filter(alert => {
@@ -144,7 +181,7 @@ export default function Alerts() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-primary">Loading alerts...</div>
+        <div className="animate-pulse text-primary">Loading your wellness insights...</div>
       </div>
     );
   }
@@ -162,11 +199,11 @@ export default function Alerts() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
-                <Bell className="w-8 h-8 text-primary" />
-                Alerts Center
+                <Heart className="w-8 h-8 text-primary" />
+                Wellness Insights
               </h1>
               <p className="text-muted-foreground">
-                Stay informed about your health and wellness patterns
+                Personalized observations to support your health journey
               </p>
             </div>
             
@@ -179,7 +216,18 @@ export default function Alerts() {
           </div>
         </motion.div>
 
-        <Tabs defaultValue="all" onValueChange={(v) => setFilter(v as any)}>
+        {/* Gentle Disclaimer */}
+        <Card className="mb-6 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
+          <CardContent className="py-4 flex items-start gap-3">
+            <Lightbulb className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              These insights are based on patterns in your check-ins and conversations. They're meant to be helpful observations, not medical advice. 
+              For any health concerns, please consult with a qualified healthcare professional.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Tabs defaultValue="all" onValueChange={(v) => setFilter(v as 'all' | 'unread' | 'read')}>
           <TabsList className="mb-6">
             <TabsTrigger value="all" className="gap-2">
               <Filter className="w-4 h-4" />
@@ -187,104 +235,146 @@ export default function Alerts() {
             </TabsTrigger>
             <TabsTrigger value="unread" className="gap-2">
               <Bell className="w-4 h-4" />
-              Unread ({unreadCount})
+              New ({unreadCount})
             </TabsTrigger>
             <TabsTrigger value="read" className="gap-2">
               <CheckCircle className="w-4 h-4" />
-              Read ({alerts.length - unreadCount})
+              Reviewed ({alerts.length - unreadCount})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value={filter}>
             {filteredAlerts.length > 0 ? (
               <div className="space-y-4">
-                {filteredAlerts.map((alert, index) => (
-                  <motion.div
-                    key={alert.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Card className={`transition-all ${getSeverityStyles(alert.severity)} ${!alert.is_read ? 'ring-2 ring-primary/20' : ''}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-4">
-                          <div className="mt-1">
-                            {getSeverityIcon(alert.severity)}
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <Badge variant={alert.severity === 'high' ? 'destructive' : 'secondary'}>
-                                {alert.alert_type}
-                              </Badge>
-                              <Badge variant="outline" className="capitalize">
-                                {alert.severity} priority
-                              </Badge>
-                              {!alert.is_read && (
-                                <Badge className="bg-primary">New</Badge>
-                              )}
+                {filteredAlerts.map((alert, index) => {
+                  const config = getAlertConfig(alert.alert_type);
+                  const Icon = config.icon;
+                  const { mainMessage, suggestion } = parseMessageForSuggestion(alert.message);
+                  const severityInfo = getSeverityLabel(alert.severity);
+
+                  return (
+                    <motion.div
+                      key={alert.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Card className={`transition-all ${getSeverityStyles(alert.severity)} ${!alert.is_read ? 'ring-2 ring-primary/20' : ''}`}>
+                        <CardContent className="p-5">
+                          <div className="flex items-start gap-4">
+                            <div className={`mt-1 p-2 rounded-full bg-background/50 ${config.color}`}>
+                              <Icon className="w-5 h-5" />
                             </div>
                             
-                            <p className="text-foreground mb-3">{alert.message}</p>
-                            
-                            <div className="flex items-center justify-between gap-4 flex-wrap">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Clock className="w-3 h-3" />
-                                {new Date(alert.created_at).toLocaleString()}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                                <Badge variant="outline" className={config.color}>
+                                  {config.label}
+                                </Badge>
+                                <Badge variant={severityInfo.variant}>
+                                  {severityInfo.label}
+                                </Badge>
+                                {!alert.is_read && (
+                                  <Badge className="bg-primary">New</Badge>
+                                )}
                               </div>
                               
-                              {!alert.is_read && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => markAsRead(alert.id)}
-                                  className="gap-2"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                  Mark as read
-                                </Button>
+                              <p className="text-foreground mb-3 leading-relaxed">{mainMessage}</p>
+                              
+                              {suggestion && (
+                                <div className="bg-background/50 rounded-lg p-3 mb-3 flex items-start gap-2">
+                                  <Lightbulb className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                                  <p className="text-sm text-muted-foreground">{suggestion}</p>
+                                </div>
                               )}
+                              
+                              <div className="flex items-center justify-between gap-4 flex-wrap">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Clock className="w-3 h-3" />
+                                  {new Date(alert.created_at).toLocaleDateString(undefined, {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  {(alert.severity === 'medium' || alert.severity === 'warning') && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => navigate('/consultations')}
+                                      className="gap-2 text-xs"
+                                    >
+                                      <Calendar className="w-3 h-3" />
+                                      Book Consultation
+                                    </Button>
+                                  )}
+                                  {!alert.is_read && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => markAsRead(alert.id)}
+                                      className="gap-2"
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                      Got it
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
               </div>
             ) : (
               <Card className="border-dashed">
                 <CardContent className="py-16 text-center">
-                  <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">
-                    {filter === 'all' ? 'No alerts yet' : `No ${filter} alerts`}
+                    {filter === 'all' ? 'No insights yet' : `No ${filter} insights`}
                   </h3>
-                  <p className="text-muted-foreground">
+                  <p className="text-muted-foreground max-w-md mx-auto">
                     {filter === 'all' 
-                      ? 'Your wellness alerts will appear here when patterns are detected'
+                      ? 'Keep logging your check-ins and chatting with our wellness assistant. We\'ll share helpful observations as patterns emerge.'
                       : filter === 'unread'
-                      ? 'All caught up! No new alerts to review'
-                      : 'No alerts have been marked as read yet'
+                      ? 'All caught up! No new insights to review.'
+                      : 'No insights have been marked as reviewed yet.'
                     }
                   </p>
+                  {filter === 'all' && (
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => navigate('/check-in')}
+                    >
+                      Log a Check-in
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
           </TabsContent>
         </Tabs>
 
-        {/* Info Cards */}
+        {/* Supportive Info Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-          <Card className="bg-gradient-to-br from-destructive/10 to-destructive/5 border-destructive/20">
+          <Card className="bg-gradient-to-br from-rose-500/10 to-rose-500/5 border-rose-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-destructive" />
-                High Priority
+                <Heart className="w-4 h-4 text-rose-500" />
+                Worth Your Attention
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                Critical patterns detected. Consider consulting a healthcare professional.
+                Patterns that might benefit from a chat with a healthcare professional. No pressure, just a friendly nudge.
               </p>
             </CardContent>
           </Card>
@@ -292,13 +382,13 @@ export default function Alerts() {
           <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                Medium Priority
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                Good to Know
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                Notable patterns that may need attention. Monitor closely.
+                Helpful observations about your wellness patterns. Consider these gentle reminders for self-care.
               </p>
             </CardContent>
           </Card>
@@ -306,13 +396,13 @@ export default function Alerts() {
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Bell className="w-4 h-4 text-primary" />
-                Low Priority
+                <Lightbulb className="w-4 h-4 text-primary" />
+                For Your Info
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                Informational alerts about your wellness journey.
+                General wellness tips and reminders to keep you on track with your health journey.
               </p>
             </CardContent>
           </Card>
