@@ -204,11 +204,11 @@ const Chat = () => {
     }
   };
 
-  const determineCategory = (userIssue: string): 'medical' | 'mental' => {
-    const mentalKeywords = ['stress', 'anxiety', 'depress', 'sad', 'worry', 'mental', 'emotion', 'mood', 'feeling', 'panic', 'fear', 'lonely', 'overwhelm', 'sleep', 'insomnia'];
+  const determineCategory = (userIssue: string): 'medical' | 'wellness' => {
+    const wellnessKeywords = ['stress', 'anxiety', 'depress', 'sad', 'worry', 'mental', 'emotion', 'mood', 'feeling', 'panic', 'fear', 'lonely', 'overwhelm', 'sleep', 'insomnia'];
     const lowerIssue = userIssue.toLowerCase();
-    const isMental = mentalKeywords.some(keyword => lowerIssue.includes(keyword));
-    return isMental ? 'mental' : 'medical';
+    const isWellness = wellnessKeywords.some(keyword => lowerIssue.includes(keyword));
+    return isWellness ? 'wellness' : 'medical';
   };
 
   const handleSubmitForReview = async (message: Message) => {
@@ -246,7 +246,7 @@ const Chat = () => {
 
       toast({
         title: "Submitted for review",
-        description: `Your case has been sent to a ${category === 'mental' ? 'wellness advisor' : 'doctor'} for verification.`,
+        description: `Your case has been sent to a ${category === 'wellness' ? 'wellness advisor' : 'doctor'} for verification.`,
       });
     } catch (error) {
       console.error('Error submitting case:', error);

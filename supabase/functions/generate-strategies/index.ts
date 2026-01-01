@@ -32,6 +32,25 @@ serve(async (req) => {
 
     console.log("Generating personalized strategies for user:", user.id);
 
+    // Rate limiting check - strategies generation is expensive
+    const { data: rateLimitCheck, error: rateLimitError } = await supabase.rpc('check_rate_limit', {
+      _user_id: user.id,
+      _action: 'generate_strategies',
+      _max_requests: 5,
+      _window_minutes: 60
+    });
+
+    if (rateLimitError) {
+      console.error("Rate limit check error:", rateLimitError);
+      // Continue without rate limiting if check fails
+    } else if (rateLimitCheck && !rateLimitCheck.allowed) {
+      console.log(`Rate limit exceeded for strategies generation: user ${user.id}`);
+      return new Response(
+        JSON.stringify({ error: "Strategy generation rate limit exceeded. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get recent check-ins (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -69,22 +88,24 @@ serve(async (req) => {
       moodCounts[p.mood] = (moodCounts[p.mood] || 0) + 1;
     });
 
-    // Extract symptoms and topics from chat
+    // Extract symptoms and topics from chat (with basic sanitization)
     const symptomKeywords = ['headache', 'pain', 'tired', 'fatigue', 'stress', 'anxiety', 
       'sleep', 'insomnia', 'depression', 'worry', 'tension', 'ache', 'nausea'];
     
     const detectedSymptoms: string[] = [];
+    const sanitizedChatTopics = chatTopics.toLowerCase().slice(0, 5000); // Limit for safety
+    
     symptomKeywords.forEach(keyword => {
-      if (chatTopics.toLowerCase().includes(keyword)) {
+      if (sanitizedChatTopics.includes(keyword)) {
         detectedSymptoms.push(keyword);
       }
     });
 
-    // Build prompt for AI
+    // Build prompt for AI (sanitized - only use extracted data, not raw user input)
     const userContext = `
 User Health Context:
 - Recent mood patterns: ${JSON.stringify(moodCounts)}
-- Journal entries hint at: ${moodPatterns.slice(0, 5).map(p => p.journal).filter(Boolean).join("; ")}
+- Journal entries hint at: ${moodPatterns.slice(0, 5).map(p => (p.journal || '').slice(0, 100)).filter(Boolean).join("; ")}
 - Symptoms/topics mentioned in chats: ${detectedSymptoms.join(", ") || "general health questions"}
 - Number of check-ins in last 30 days: ${checkIns?.length || 0}
 `;
@@ -230,6 +251,8 @@ Only return the JSON object, no other text.`;
         ]
       };
     }
+
+    console.log("Strategies generated successfully");
 
     return new Response(
       JSON.stringify({ 

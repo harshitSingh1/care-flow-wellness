@@ -50,6 +50,27 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
+    console.log(`Analyzing patterns for user ${user.id}`);
+
+    // Rate limiting check - more lenient for pattern analysis
+    const { data: rateLimitCheck, error: rateLimitError } = await supabase.rpc('check_rate_limit', {
+      _user_id: user.id,
+      _action: 'analyze_patterns',
+      _max_requests: 10,
+      _window_minutes: 60
+    });
+
+    if (rateLimitError) {
+      console.error("Rate limit check error:", rateLimitError);
+      // Continue without rate limiting if check fails
+    } else if (rateLimitCheck && !rateLimitCheck.allowed) {
+      console.log(`Rate limit exceeded for pattern analysis: user ${user.id}`);
+      return new Response(
+        JSON.stringify({ error: "Pattern analysis rate limit exceeded. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get check-ins from the last 14 days for better pattern analysis
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
@@ -59,7 +80,8 @@ serve(async (req) => {
       .select("*")
       .eq("user_id", user.id)
       .gte("created_at", fourteenDaysAgo.toISOString())
-      .order("created_at", { ascending: false }) as { data: CheckIn[] | null };
+      .order("created_at", { ascending: false })
+      .limit(100) as { data: CheckIn[] | null };
 
     // Get recent chat messages for symptom detection
     const { data: messages } = await supabase
@@ -68,7 +90,8 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .eq("role", "user")
       .gte("created_at", fourteenDaysAgo.toISOString())
-      .order("created_at", { ascending: false }) as { data: ChatMessage[] | null };
+      .order("created_at", { ascending: false })
+      .limit(100) as { data: ChatMessage[] | null };
 
     // Get existing alerts to avoid duplicates
     const sevenDaysAgo = new Date();
@@ -301,6 +324,8 @@ serve(async (req) => {
 
       await supabase.from("alerts").insert(alertsToInsert);
     }
+
+    console.log(`Pattern analysis complete: ${newAlerts.length} new alerts generated`);
 
     return new Response(
       JSON.stringify({ 
