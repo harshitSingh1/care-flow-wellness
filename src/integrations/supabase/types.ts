@@ -125,6 +125,45 @@ export type Database = {
         }
         Relationships: []
       }
+      doctor_profiles: {
+        Row: {
+          availability_status: string
+          created_at: string
+          full_name: string
+          id: string
+          is_verified: boolean
+          qualification: string
+          specialty: string
+          updated_at: string
+          user_id: string
+          years_of_experience: number
+        }
+        Insert: {
+          availability_status?: string
+          created_at?: string
+          full_name: string
+          id?: string
+          is_verified?: boolean
+          qualification: string
+          specialty: string
+          updated_at?: string
+          user_id: string
+          years_of_experience?: number
+        }
+        Update: {
+          availability_status?: string
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_verified?: boolean
+          qualification?: string
+          specialty?: string
+          updated_at?: string
+          user_id?: string
+          years_of_experience?: number
+        }
+        Relationships: []
+      }
       doctor_reviews: {
         Row: {
           ai_suggestion: string

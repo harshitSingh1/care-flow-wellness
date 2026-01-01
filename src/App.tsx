@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Chat from "./pages/Chat";
 import CheckIn from "./pages/CheckIn";
@@ -17,6 +18,7 @@ import Vault from "./pages/Vault";
 import DoctorLogin from "./pages/DoctorLogin";
 import DoctorWorkbench from "./pages/DoctorWorkbench";
 import AdvisorWorkbench from "./pages/AdvisorWorkbench";
+import DoctorProfileSetup from "./pages/DoctorProfileSetup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,20 +30,71 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Public routes */}
           <Route path="/" element={<Index />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/checkin" element={<CheckIn />} />
-          <Route path="/plans" element={<Plans />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/strategies" element={<Strategies />} />
-          <Route path="/consultations" element={<Consultations />} />
-          <Route path="/vault" element={<Vault />} />
+          <Route path="/plans" element={<Plans />} />
           <Route path="/doctor-login" element={<DoctorLogin />} />
-          <Route path="/doctor-workbench" element={<DoctorWorkbench />} />
-          <Route path="/advisor-workbench" element={<AdvisorWorkbench />} />
+          
+          {/* User-only routes (regular users) */}
+          <Route path="/chat" element={
+            <ProtectedRoute allowedRoles={["user", "admin"]}>
+              <Chat />
+            </ProtectedRoute>
+          } />
+          <Route path="/checkin" element={
+            <ProtectedRoute allowedRoles={["user", "admin"]}>
+              <CheckIn />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard" element={
+            <ProtectedRoute allowedRoles={["user", "admin"]}>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/alerts" element={
+            <ProtectedRoute allowedRoles={["user", "admin"]}>
+              <Alerts />
+            </ProtectedRoute>
+          } />
+          <Route path="/strategies" element={
+            <ProtectedRoute allowedRoles={["user", "admin"]}>
+              <Strategies />
+            </ProtectedRoute>
+          } />
+          <Route path="/consultations" element={
+            <ProtectedRoute allowedRoles={["user", "admin"]}>
+              <Consultations />
+            </ProtectedRoute>
+          } />
+          <Route path="/vault" element={
+            <ProtectedRoute allowedRoles={["user", "admin"]}>
+              <Vault />
+            </ProtectedRoute>
+          } />
+          
+          {/* Doctor/Advisor routes */}
+          <Route path="/doctor-profile-setup" element={
+            <ProtectedRoute allowedRoles={["doctor", "advisor", "admin"]}>
+              <DoctorProfileSetup />
+            </ProtectedRoute>
+          } />
+          <Route path="/doctor-workbench" element={
+            <ProtectedRoute allowedRoles={["doctor", "admin"]}>
+              <DoctorWorkbench />
+            </ProtectedRoute>
+          } />
+          <Route path="/advisor-workbench" element={
+            <ProtectedRoute allowedRoles={["advisor", "admin"]}>
+              <AdvisorWorkbench />
+            </ProtectedRoute>
+          } />
+          
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
