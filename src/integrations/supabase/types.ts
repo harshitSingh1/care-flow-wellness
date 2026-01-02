@@ -308,6 +308,7 @@ export type Database = {
       submitted_cases: {
         Row: {
           ai_response: string
+          assigned_professional_id: string | null
           category: string
           created_at: string
           id: string
@@ -322,6 +323,7 @@ export type Database = {
         }
         Insert: {
           ai_response: string
+          assigned_professional_id?: string | null
           category: string
           created_at?: string
           id?: string
@@ -336,6 +338,7 @@ export type Database = {
         }
         Update: {
           ai_response?: string
+          assigned_professional_id?: string | null
           category?: string
           created_at?: string
           id?: string

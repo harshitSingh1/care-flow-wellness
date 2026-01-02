@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { chatService } from "@/lib/supabase";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { autoAssignProfessional } from "@/lib/caseAssignment";
 
 type StructuredResponse = {
   summary: string;
@@ -230,7 +231,8 @@ const Chat = () => {
       const userIssue = message.previousUserMessage || "Health concern";
       const category = determineCategory(userIssue);
 
-      const { error } = await supabase.from('submitted_cases').insert({
+      // Insert the case
+      const { data: insertedCase, error } = await supabase.from('submitted_cases').insert({
         user_id: userId,
         message_id: message.id,
         user_issue: userIssue,
@@ -238,11 +240,16 @@ const Chat = () => {
         selected_remedies: selected,
         category: category,
         status: 'pending_review',
-      });
+      }).select('id').single();
 
       if (error) throw error;
 
-      setSubmittedCases(prev => [...prev, { messageId: message.id, status: 'pending_review' }]);
+      // Auto-assign a professional based on category
+      if (insertedCase?.id) {
+        await autoAssignProfessional(insertedCase.id, category);
+      }
+
+      setSubmittedCases(prev => [...prev, { messageId: message.id, status: 'pending_review', category }]);
 
       toast({
         title: "Submitted for review",
