@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import {
   User,
   Clock,
   X,
+  ExternalLink,
 } from "lucide-react";
 
 interface SubmittedCase {
@@ -137,6 +139,11 @@ export function CaseReviewCard({ caseData, onUpdate, roleLabel }: CaseReviewCard
             <Badge variant="outline" className="capitalize">
               {caseData.category}
             </Badge>
+            <Link to={`/case/${caseData.id}`}>
+              <Button variant="ghost" size="icon" className="h-7 w-7">
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">

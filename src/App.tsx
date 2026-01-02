@@ -19,6 +19,7 @@ import DoctorLogin from "./pages/DoctorLogin";
 import DoctorWorkbench from "./pages/DoctorWorkbench";
 import AdvisorWorkbench from "./pages/AdvisorWorkbench";
 import DoctorProfileSetup from "./pages/DoctorProfileSetup";
+import CaseDetail from "./pages/CaseDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -92,6 +93,11 @@ const App = () => (
           <Route path="/advisor-workbench" element={
             <ProtectedRoute allowedRoles={["advisor", "admin"]}>
               <AdvisorWorkbench />
+            </ProtectedRoute>
+          } />
+          <Route path="/case/:caseId" element={
+            <ProtectedRoute allowedRoles={["doctor", "advisor", "admin"]}>
+              <CaseDetail />
             </ProtectedRoute>
           } />
           

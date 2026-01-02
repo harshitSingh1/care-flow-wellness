@@ -7,28 +7,21 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { Heart, Mail, Lock, Stethoscope, ChevronDown, ChevronUp } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
-type AccountType = "user" | "doctor" | "advisor";
+type AccountType = "user" | "professional";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showProfessionalOptions, setShowProfessionalOptions] = useState(false);
-  const [accountType, setAccountType] = useState<AccountType>("user");
+  const [isProfessional, setIsProfessional] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/";
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard";
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -56,14 +49,15 @@ const Auth = () => {
     const userRoles = roles?.map(r => r.role) || [];
     const isDoctor = userRoles.includes("doctor");
     const isAdvisor = userRoles.includes("advisor");
+    const isPro = isDoctor || isAdvisor;
 
-    if (isDoctor || isAdvisor) {
+    if (isPro) {
       // Check if they have a profile set up
       const { data: profile } = await supabase
         .from("doctor_profiles")
         .select("id")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
       if (!profile) {
         navigate("/doctor-profile-setup");
@@ -77,7 +71,8 @@ const Auth = () => {
         navigate("/advisor-workbench");
       }
     } else {
-      navigate(from);
+      // Regular user - go to dashboard or intended destination
+      navigate(from === "/" ? "/dashboard" : from);
     }
   };
 
@@ -97,13 +92,15 @@ const Auth = () => {
 
         if (error) throw error;
 
-        // If account type is doctor or advisor, add the role
-        if (data.user && accountType !== "user") {
+        // If professional, add a placeholder role - they'll choose doctor/advisor during profile setup
+        if (data.user && isProfessional) {
+          // We'll mark them as needing profile setup by adding 'doctor' role temporarily
+          // The profile setup page will let them choose their actual specialty
           const { error: roleError } = await supabase
             .from("user_roles")
             .insert({
               user_id: data.user.id,
-              role: accountType,
+              role: "doctor", // Default to doctor, they can specify during profile setup
             });
 
           if (roleError) {
@@ -112,14 +109,13 @@ const Auth = () => {
         }
 
         toast({
-          title: "Account created! ✨",
-          description: accountType === "user" 
-            ? "You can now sign in to start your wellness journey."
-            : "Please sign in and complete your professional profile.",
+          title: "Account created!",
+          description: isProfessional 
+            ? "Please sign in and complete your professional profile."
+            : "You can now sign in to start your wellness journey.",
         });
         setIsSignUp(false);
-        setShowProfessionalOptions(false);
-        setAccountType("user");
+        setIsProfessional(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -194,51 +190,32 @@ const Auth = () => {
               />
             </div>
 
-            {/* Professional account options - only show during signup */}
+            {/* Professional account option - only show during signup */}
             {isSignUp && (
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => setShowProfessionalOptions(!showProfessionalOptions)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full justify-center"
+              <div className="flex items-center space-x-3 p-3 rounded-xl bg-muted/50 border border-border/50">
+                <Checkbox 
+                  id="professional"
+                  checked={isProfessional}
+                  onCheckedChange={(checked) => setIsProfessional(!!checked)}
+                />
+                <label 
+                  htmlFor="professional" 
+                  className="flex items-center gap-2 text-sm cursor-pointer flex-1"
                 >
-                  <Stethoscope className="h-4 w-4" />
-                  Are you a healthcare professional?
-                  {showProfessionalOptions ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                </button>
-
-                {showProfessionalOptions && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="space-y-2"
-                  >
-                    <Select 
-                      value={accountType} 
-                      onValueChange={(value: AccountType) => setAccountType(value)}
-                    >
-                      <SelectTrigger className="rounded-2xl">
-                        <SelectValue placeholder="Select account type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">Regular User</SelectItem>
-                        <SelectItem value="doctor">Doctor / Medical Professional</SelectItem>
-                        <SelectItem value="advisor">Mental Wellness Advisor</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {accountType !== "user" && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        Professional accounts require profile verification
-                      </p>
-                    )}
-                  </motion.div>
-                )}
+                  <Stethoscope className="h-4 w-4 text-primary" />
+                  <span>I am a healthcare professional</span>
+                </label>
               </div>
+            )}
+
+            {isSignUp && isProfessional && (
+              <motion.p
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="text-xs text-muted-foreground text-center px-2"
+              >
+                You'll choose your specialty (Doctor or Wellness Advisor) during profile setup
+              </motion.p>
             )}
 
             <Button
@@ -255,8 +232,7 @@ const Auth = () => {
                 type="button"
                 onClick={() => {
                   setIsSignUp(!isSignUp);
-                  setShowProfessionalOptions(false);
-                  setAccountType("user");
+                  setIsProfessional(false);
                 }}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
