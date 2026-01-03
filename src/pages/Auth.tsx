@@ -87,6 +87,10 @@ const Auth = () => {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              account_type: isProfessional ? "professional" : "user",
+              professional_role: "doctor", // Default to doctor; can be changed during profile setup
+            },
           },
         });
 
