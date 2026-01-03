@@ -92,15 +92,15 @@ const Auth = () => {
 
         if (error) throw error;
 
-        // If professional, add a placeholder role - they'll choose doctor/advisor during profile setup
-        if (data.user && isProfessional) {
-          // We'll mark them as needing profile setup by adding 'doctor' role temporarily
-          // The profile setup page will let them choose their actual specialty
+        if (data.user) {
+          // Assign appropriate role based on account type
+          const roleToAssign = isProfessional ? "doctor" : "user";
+          
           const { error: roleError } = await supabase
             .from("user_roles")
             .insert({
               user_id: data.user.id,
-              role: "doctor", // Default to doctor, they can specify during profile setup
+              role: roleToAssign,
             });
 
           if (roleError) {
